@@ -1,26 +1,11 @@
 import type { ApolloClient } from "@apollo/client";
-import { gql } from "@apollo/client";
+import { type Article, NEWS } from "./gql";
+import { type DismissedNewsStore } from "./store";
 
-export type Article = {
-	__typename: "Article";
-	id: string;
-	title: string;
-	summary: string;
-	publishedAt: string;
-};
-
-export const NEWS = gql`
-	query News {
-		news {
-			id
-			title
-			summary
-			publishedAt
-		}
-	}
-`;
-
-export async function getNews(client: ApolloClient, source: "cache" | "network"): Promise<Article[]> {
+export async function getNews(
+	client: ApolloClient,
+	source: "cache" | "network",
+): Promise<Article[]> {
 	const { data } = await client.query({
 		query: NEWS,
 		fetchPolicy: source === "cache" ? "cache-only" : "network-only",
@@ -35,4 +20,22 @@ export async function getNews(client: ApolloClient, source: "cache" | "network")
  */
 export function visibleArticles(articles: Article[], dismissedIds: ReadonlySet<string>): Article[] {
 	return articles.filter((article) => !dismissedIds.has(article.id));
+}
+
+export async function getVisibleArticles(
+	dismissedStore: DismissedNewsStore,
+	client: ApolloClient,
+	source: "cache" | "network" = "network",
+) {
+	const articles = await getNews(client, source);
+	return visibleArticles(articles, new Set(dismissedStore.getState().dismissedIds));
+}
+
+export async function dismissArticle(dismissedStore: DismissedNewsStore, id: string) {
+	await dismissedStore.getState().dismiss(id);
+	return dismissedStore.getState().dismissedIds;
+}
+
+export async function getDismissedIds(dismissedStore: DismissedNewsStore) {
+	return dismissedStore.getState().dismissedIds;
 }

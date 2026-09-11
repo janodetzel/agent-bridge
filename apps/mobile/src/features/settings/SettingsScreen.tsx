@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useStore } from "zustand";
 
 import { settingsStore } from "../../app/instances";
+import { setNotifications, setUnits } from "./api";
 
 export function SettingsScreen() {
 	// The screen reads the same store instance a command writes through.
@@ -15,7 +16,7 @@ export function SettingsScreen() {
 				{(["km", "mi"] as const).map((option) => (
 					<Pressable
 						key={option}
-						onPress={() => void settingsStore.getState().setUnits(option)}
+						onPress={() => void setUnits(settingsStore, option)}
 						style={[styles.choice, units === option && styles.choiceSelected]}
 					>
 						<Text style={[styles.choiceLabel, units === option && styles.choiceLabelSelected]}>
@@ -29,7 +30,7 @@ export function SettingsScreen() {
 				<Text style={styles.label}>Notifications</Text>
 				<Switch
 					value={notifications}
-					onValueChange={(value) => void settingsStore.getState().setNotifications(value)}
+					onValueChange={(value) => void setNotifications(settingsStore, value)}
 				/>
 			</View>
 		</View>

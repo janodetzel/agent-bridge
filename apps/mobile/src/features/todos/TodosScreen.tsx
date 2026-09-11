@@ -11,7 +11,8 @@ import {
 } from "react-native";
 
 import { apolloClient } from "../../app/instances";
-import { addTodo, removeTodo, setTodoDone, TODOS, type Todo } from "./api";
+import { addTodo, removeTodo, setTodoDone } from "./api";
+import { TODOS, type Todo } from "./gql";
 
 export function TodosScreen() {
 	const { data, loading } = useQuery<{ todos: Todo[] }>(TODOS);

@@ -1,48 +1,5 @@
 import type { ApolloClient, Reference } from "@apollo/client";
-import { gql } from "@apollo/client";
-
-export type Todo = { __typename: "Todo"; id: string; title: string; done: boolean };
-
-const TODO_FIELDS = gql`
-	fragment TodoFields on Todo {
-		id
-		title
-		done
-	}
-`;
-
-export const TODOS = gql`
-	query Todos {
-		todos {
-			...TodoFields
-		}
-	}
-	${TODO_FIELDS}
-`;
-
-const ADD_TODO = gql`
-	mutation AddTodo($title: String!) {
-		addTodo(title: $title) {
-			...TodoFields
-		}
-	}
-	${TODO_FIELDS}
-`;
-
-const SET_TODO_DONE = gql`
-	mutation SetTodoDone($id: ID!, $done: Boolean!) {
-		setTodoDone(id: $id, done: $done) {
-			...TodoFields
-		}
-	}
-	${TODO_FIELDS}
-`;
-
-const REMOVE_TODO = gql`
-	mutation RemoveTodo($id: ID!) {
-		removeTodo(id: $id)
-	}
-`;
+import { type Todo, ADD_TODO, REMOVE_TODO, SET_TODO_DONE, TODO_FIELDS, TODOS } from "./gql";
 
 /**
  * One operation function per mutation, each owning its cache update. The screen

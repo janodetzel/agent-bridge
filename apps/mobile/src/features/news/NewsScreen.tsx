@@ -3,7 +3,8 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "
 import { useStore } from "zustand";
 
 import { dismissedNewsStore } from "../../app/instances";
-import { NEWS, visibleArticles, type Article } from "./api";
+import { dismissArticle, visibleArticles } from "./api";
+import { type Article, NEWS } from "./gql";
 
 export function NewsScreen() {
 	const { data, loading } = useQuery<{ news: Article[] }>(NEWS);
@@ -25,7 +26,7 @@ export function NewsScreen() {
 							<Text style={styles.title}>{item.title}</Text>
 							<Text style={styles.summary}>{item.summary}</Text>
 						</View>
-						<Pressable onPress={() => void dismissedNewsStore.getState().dismiss(item.id)}>
+						<Pressable onPress={() => void dismissArticle(dismissedNewsStore, item.id)}>
 							<Text style={styles.dismiss}>Dismiss</Text>
 						</Pressable>
 					</View>
