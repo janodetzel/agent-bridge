@@ -58,7 +58,26 @@ widen the rule.
 
 ## Verifying behavior in the simulator
 
-Not available yet: the CLI is task 4 and 5 of `docs/package-architecture.md`.
-Once `pnpm agent-bridge` exists, this section takes the content of "How the agent
-uses it" from `docs/agent-bridge-architecture.md`, with command names in the
-`<namespace>.<name>` form.
+The running app exposes its business logic through `pnpm agent-bridge`.
+
+1. Start Metro and the simulator first. Exit code 2 means the app is not connected.
+2. Run `pnpm agent-bridge commands` to see every command and its arguments.
+3. After a code change, reload the app (press `r` in Metro) before you run commands.
+4. After a mutation that touches server data, compare `getX --source cache` with
+   `getX --source network`, in that order. A difference means the cache update is
+   wrong. Read `cache` first: a `network-only` query writes its result to the cache
+   and hides the bug from every later `cache` read.
+5. Use `nav.navigate` to put the app on a screen for a UI check. Do not verify data
+   with screenshots. Use the data commands.
+6. When you add a feature with business logic, add a command for it in the
+   feature's `commands.ts`.
+7. Every store action and operation function must return a promise that resolves
+   when the work is done. Never fire and forget.
+
+Two things to keep in mind while working:
+
+- Only one CLI or web console can be attached at a time. The app drops the older
+  one, which then exits with code 2.
+- Every connected device answers. With a simulator and an emulator both on Metro, a
+  command runs on both. Keep one connected.
+- On the Android emulator, run `adb reverse tcp:8081 tcp:8081` once first.

@@ -33,14 +33,23 @@ apps/
 | `pnpm --filter mobile start`                | Starts Metro and the app                     |
 | `pnpm --filter mobile check:release-bundle` | Fails if the bridge reaches a release bundle |
 
+## Driving the app
+
+With Metro and a simulator running:
+
+```
+$ pnpm agent-bridge commands
+$ pnpm agent-bridge demo.echo --args '{"hello":"world"}'
+$ pnpm agent-bridge nav.navigate --screen Settings
+```
+
+`packages/agent-bridge/README.md` covers the CLI, the exit codes, the adapters, and
+the console. `CLAUDE.md` says how an agent should use it.
+
 ## State of the build
 
-Tasks 1 to 3 of `docs/package-architecture.md` are done: the plugin is scaffolded
-with `create-dev-plugin`, the core protocol and handler are implemented and
-tested, and the app hook connects a registry to Metro. `apps/mobile` is wired up
-with Apollo, Zustand, React Navigation, and a `demo` command group.
-
-Tasks 4 to 9 are open: the CLI and its copied Expo wire format, the React
-Navigation, Apollo, and Zustand adapters, the command console, and the simulator
-smoke test. Until the CLI exists there is no way to call a command from a
-terminal.
+All nine tasks of `docs/package-architecture.md` are done. The plugin is scaffolded
+with `create-dev-plugin`; the core, the app hook, the CLI with Expo's wire format,
+the three adapters, and the web console are implemented and tested; and the smoke
+test ran against the iOS simulator and the Android emulator, both of which also
+pass the release-bundle check.

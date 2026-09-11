@@ -6,7 +6,7 @@
 	"types": "build/index.d.ts",
 	"sideEffects": false,
 	"scripts": {
-		"build": "expo-module build",
+		"build": "EXPO_NONINTERACTIVE=1 expo-module build && EXPO_NONINTERACTIVE=1 expo-module build cli",
 		"build:all": "expo-module prepare && pnpm run web:export",
 		"clean": "expo-module clean",
 		"prepare": "expo-module prepare",
@@ -25,15 +25,22 @@
 		"expo-module.config.json"
 	],
 	"license": "MIT",
-	"dependencies": {},
+	"dependencies": {
+		"ws": "^8.21.3"
+	},
 	"devDependencies": {
+		"@apollo/client": "^4.3.0",
+		"@react-navigation/native": "^7.3.18",
 		"@types/react": "~19.2.2",
+		"@types/ws": "^8.18.1",
 		"expo": "~57.0.22",
 		"expo-module-scripts": "^4.1.7",
+		"graphql": "^17.0.2",
 		"react": "19.2.3",
 		"react-native": "0.86.3",
 		"typescript": "~5.9.3",
-		"zod": "^4.6.2"
+		"zod": "^4.6.2",
+		"zustand": "^5.0.15"
 	},
 	"peerDependencies": {
 		"expo": ">=53.0.0",
@@ -49,6 +56,22 @@
 			"types": "./build/core/index.d.ts",
 			"default": "./build/core/index.js"
 		},
+		"./protocol": {
+			"types": "./build/core/protocol.d.ts",
+			"default": "./build/core/protocol.js"
+		},
+		"./react-navigation": {
+			"types": "./build/adapters/react-navigation.d.ts",
+			"default": "./build/adapters/react-navigation.js"
+		},
+		"./apollo": {
+			"types": "./build/adapters/apollo.d.ts",
+			"default": "./build/adapters/apollo.js"
+		},
+		"./zustand": {
+			"types": "./build/adapters/zustand.d.ts",
+			"default": "./build/adapters/zustand.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"peerDependenciesMeta": {
@@ -61,5 +84,8 @@
 		"zustand": {
 			"optional": true
 		}
+	},
+	"bin": {
+		"agent-bridge": "./build/cli/index.js"
 	}
 }
