@@ -38,16 +38,29 @@ export default tseslint.config(
 		},
 	},
 	{
-		// Rule 2 of the architecture: business logic lives in stores and operation
-		// functions, and a store update goes through the store file that owns it.
-		files: ["packages/features/**/*.ts"],
-		ignores: ["packages/features/**/store.ts"],
+		// The example app keeps its logic and its UI side by side, so the boundary
+		// that matters is a lint rule on file names rather than a package split: an
+		// operation function, a store, or a command that imports React cannot be
+		// called from a command.
+		files: ["apps/*/src/features/*/{api,store,commands}.ts"],
 		rules: {
-			"no-restricted-syntax": [
+			"no-restricted-imports": [
 				"error",
 				{
-					selector: "CallExpression[callee.name='set']",
-					message: "Only a store file calls set(). Move the update into the store action.",
+					patterns: [
+						{
+							group: [
+								"react",
+								"react-native",
+								"react-native/*",
+								"expo",
+								"expo-*",
+								"@react-navigation/*",
+							],
+							message:
+								"Logic that a command calls must run outside React. Move the UI part into the feature's screen.",
+						},
+					],
 				},
 			],
 			"no-restricted-properties": [
@@ -68,7 +81,7 @@ export default tseslint.config(
 	{
 		// Keeping the bridge out of a release build depends on a lazy require in a
 		// branch the bundler drops. Written any other way, it ships to users.
-		files: ["packages/agent-bridge/src/index.ts", "apps/mobile/src/agent/groups.ts"],
+		files: ["packages/agent-bridge/src/index.ts", "apps/*/src/app/App.tsx"],
 		rules: {
 			"@typescript-eslint/ban-ts-comment": "off",
 			"@typescript-eslint/consistent-type-imports": "off",

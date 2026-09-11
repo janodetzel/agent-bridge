@@ -2,7 +2,8 @@
  * Keeps the layers of agent-bridge apart:
  * - `src/core` runs anywhere, so it may not touch a UI library.
  * - `src/adapters` may use only its own library and core.
- * - feature packages stay free of React, so the bridge can drive them headless.
+ * The example app's own boundary - logic files that must not import React - is an
+ * ESLint rule on file names instead, because its features hold logic and UI together.
  */
 // Rules match the resolved path of a dependency, which for an npm package is the
 // file inside node_modules. Matching on the path rather than on dependency-cruiser's
@@ -19,17 +20,6 @@ const UI_LIBRARIES = inNodeModules(
 	"@react-navigation/[^/]+",
 	"@apollo/client",
 	"zustand",
-);
-
-// What a feature package may not import. Apollo's root entry point is React-free in
-// version 4; the hooks live under @apollo/client/react.
-const REACT_LIBRARIES = inNodeModules(
-	"react",
-	"react-native",
-	"expo",
-	"expo-[^/]+",
-	"@react-navigation/[^/]+",
-	"@apollo/client/react",
 );
 
 module.exports = {
@@ -75,18 +65,6 @@ module.exports = {
 			to: {
 				path: UI_LIBRARIES,
 				pathNot: inNodeModules("zustand"),
-			},
-		},
-		{
-			name: "features-stay-free-of-ui",
-			comment:
-				"packages/features holds the business logic the CLI drives. A React import there " +
-				"means a command cannot reach it. Apollo is fine, but not its React entry point: " +
-				"a cache update that lives in a hook lives inside a component.",
-			severity: "error",
-			from: { path: "^packages/features/src" },
-			to: {
-				path: REACT_LIBRARIES,
 			},
 		},
 		{

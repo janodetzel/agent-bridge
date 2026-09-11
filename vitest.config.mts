@@ -9,8 +9,10 @@ export default defineConfig({
 	},
 	test: {
 		// Dependencies are externalized by default, which would load
-		// @react-navigation/native through Node and skip the alias above.
-		server: { deps: { inline: [/@react-navigation\//] } },
+		// @react-navigation/native through Node and skip the alias above. Apollo is
+		// inlined for a different reason: externalized, it loads its own copy of
+		// graphql through Node, and graphql refuses to work across two instances.
+		server: { deps: { inline: [/@react-navigation\//, /@apollo\/client/, /^graphql/] } },
 		include: ["packages/*/test/**/*.test.ts", "apps/*/test/**/*.test.ts"],
 		environment: "node",
 	},

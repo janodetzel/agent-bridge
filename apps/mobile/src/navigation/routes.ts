@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import type { RootStackParamList } from "../navigation/ref";
+export type RootStackParamList = {
+	Home: undefined;
+	Settings: undefined;
+};
 
 /** Types do not exist at runtime, so the route names are repeated here. */
 export const RouteName = z.enum(["Home", "Settings"]);

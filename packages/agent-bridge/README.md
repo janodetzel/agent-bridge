@@ -39,13 +39,13 @@ function the UI calls, and returns the result.
 import { command, defineCommands } from "agent-bridge/core";
 import { z } from "zod";
 
-export const favoritesCommands = (client: ApolloClient) =>
-	defineCommands("favorites", {
+export const todosCommands = (client: ApolloClient) =>
+	defineCommands("todos", {
 		list: command({
 			description:
-				"Returns favorites. source=cache is what the UI shows now, source=network is what the server has.",
+				"Returns the todos. source=cache is what the screen shows now, source=network is what the server has.",
 			args: z.object({ source: z.enum(["cache", "network"]).default("cache") }),
-			run: ({ source }) => getFavorites(client, source),
+			run: ({ source }) => getTodos(client, source),
 		}),
 	});
 ```
@@ -63,12 +63,12 @@ on every render, which rebuilds the registry and reconnects the bridge each time
 the hook warns once in development when it sees that.
 
 ```tsx
-// src/agent/registry.ts
-export const groups: CommandGroup[] = [demoCommands, favoritesCommands(apolloClient)];
+// src/app/agent.ts
+export const agentGroups = [todosCommands(apolloClient), settingsCommands(settingsStore)];
 
 // App.tsx
 export default function App() {
-	useAgentBridge(groups);
+	useAgentBridge(agentGroups);
 	return; /* … */
 }
 ```

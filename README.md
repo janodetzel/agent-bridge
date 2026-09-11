@@ -16,9 +16,25 @@ The design lives in `docs/`:
 ```
 packages/
 	agent-bridge/  The Expo dev tools plugin: core protocol, app hook, CLI, web UI.
-	features/      Stores, operation functions, and command factories. No React.
 apps/
-	mobile/        The Expo app that registers the commands.
+	mobile/        A todo list that registers its commands with the bridge.
+```
+
+`apps/mobile` is deliberately small. Logic and UI sit together in a feature folder,
+and one file creates every instance:
+
+```
+src/
+	app/
+		App.tsx
+		instances.ts    the only file that creates instances
+		agent.ts        the command groups
+		api.ts          a stand-in backend, so the example runs offline
+	features/
+		todos/          api.ts, commands.ts, TodosScreen.tsx
+		settings/       store.ts, commands.ts, SettingsScreen.tsx
+	navigation/
+		routes.ts, RootNavigator.tsx
 ```
 
 ## Commands
@@ -39,7 +55,9 @@ With Metro and a simulator running:
 
 ```
 $ pnpm agent-bridge commands
-$ pnpm agent-bridge demo.echo --args '{"hello":"world"}'
+$ pnpm agent-bridge todos.add --title "Buy milk"
+$ pnpm agent-bridge todos.list --source cache
+$ pnpm agent-bridge settings.setUnits --units mi
 $ pnpm agent-bridge nav.navigate --screen Settings
 ```
 
