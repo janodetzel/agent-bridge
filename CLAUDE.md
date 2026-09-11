@@ -10,6 +10,19 @@ The example app keeps logic and UI together in `src/features/<feature>/`, and
 docs describe a larger split - a provider, and features in their own package - which
 is the next step if this grows into a product, not the shape it has now.
 
+## Skills
+
+`skills/` holds the longer instructions, one folder per task, reachable as Claude
+Code skills through `.claude/skills`:
+
+| Skill                      | Use it when                                                      |
+| -------------------------- | ---------------------------------------------------------------- |
+| `driving-the-app`          | Verifying behavior at runtime with `pnpm agent-bridge`           |
+| `workspace-setup`          | Installing, building, running the app, debugging the environment |
+| `building-a-feature`       | Adding a screen, a store, a mutation, or a command               |
+| `state-architecture`       | Deciding how a feature holds state                               |
+| `maintaining-agent-bridge` | Changing the plugin: protocol, CLI, adapters, wire format        |
+
 ## Checks
 
 Run these before you call a change done:
