@@ -78,8 +78,10 @@ Two things do it, and both must hold:
 
 1. `src/index.ts` exports a no-op in production behind a lazy `require`, so the
    bundler drops the hook and the handler.
-2. The app loads its command groups behind `__DEV__`, so the commands and their
-   descriptions go too.
+2. The app's command groups go too: `agent-bridge/metro` swaps the package's empty
+   groups module for the app's at resolution time, and a release bundle keeps the
+   empty one. Resolution and constant folding both run before Metro collects
+   dependencies; a runtime-deferred import runs after, and ships everything.
 
 `test/production-bundle.test.ts` checks the first with esbuild;
 `pnpm --filter mobile check:release-bundle` checks the whole app for both platforms.

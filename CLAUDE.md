@@ -78,9 +78,12 @@ through. Put logic a command needs in one of the three, or widen the pattern.
   `Date.now`, so a command and a test see the same time.
 - A command returns picked fields, not a whole store state: the state object carries
   its actions, and functions do not survive JSON.
-- `apps/mobile` loads its command groups behind `__DEV__`, in `src/app/App.tsx`.
-  `useAgentBridge` is a no-op in production, but a plain import of `./agent` would
-  still ship every command and its description.
+- `useAgentBridge()` takes no groups. `metro.config.js` wraps its config with
+  `withAgentBridge`, which swaps the package's empty groups module for
+  `src/app/agent.ts` in a development bundle; a release bundle keeps the empty one.
+  The hook is a no-op in production too, but without that swap the commands and their
+  descriptions would still ship. Deferring the import at runtime does not work: the
+  dependency edge is created by the import, not by the call.
 - Keep the strings the release check greps for out of user-facing copy, or the check
   turns into noise people learn to ignore.
 - New feature with business logic? Add a command for it in the feature's

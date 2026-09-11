@@ -20,8 +20,10 @@ export default tseslint.config(
 	js.configs.recommended,
 	...tseslint.configs.recommended,
 	{
+		// A CommonJS file requires. That is the point of it.
 		files: ["**/*.cjs"],
 		languageOptions: { sourceType: "commonjs", globals: globals.node },
+		rules: { "@typescript-eslint/no-require-imports": "off" },
 	},
 	{
 		files: ["**/*.mjs"],

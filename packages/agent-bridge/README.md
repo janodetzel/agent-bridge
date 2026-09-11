@@ -58,9 +58,13 @@ The namespace is camelCase. `buildRegistry` keys every command as
 
 ## Registering the groups
 
-Build the array at module scope. An array built inside a component is a new array
-on every render, which rebuilds the registry and reconnects the bridge each time;
-the hook warns once in development when it sees that.
+Point Metro at the module that exports them, and call the hook with nothing:
+
+```js
+// metro.config.js
+const { withAgentBridge } = require("agent-bridge/metro");
+module.exports = withAgentBridge(getDefaultConfig(__dirname), { groups: "./src/app/agent.ts" });
+```
 
 ```tsx
 // src/app/agent.ts
@@ -68,7 +72,7 @@ export const agentGroups = [todosCommands(apolloClient), settingsCommands(settin
 
 // App.tsx
 export default function App() {
-	useAgentBridge(agentGroups);
+	useAgentBridge();
 	return; /* … */
 }
 ```
@@ -155,8 +159,11 @@ keep it out of a release build:
 
 1. `agent-bridge` exports a no-op in production, so the hook and the handler are
    dropped by the bundler.
-2. The app loads its registry behind `__DEV__`, so the commands and their
-   descriptions are dropped too. A plain import would ship all of them.
+2. The app's groups are dropped too. Wrap the Metro config with `withAgentBridge`
+   from `agent-bridge/metro` and import them from `agent-bridge/groups`, or keep a
+   `__DEV__` require in the app's own source. A plain import ships all of them, and
+   so does any runtime-deferred import: the dependency edge comes from the specifier,
+   not from the call.
 
 `pnpm --filter mobile check:release-bundle` proves it: it exports a production
 bundle and fails if the bridge appears in it. Run it for `ios` and `android`.

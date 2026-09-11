@@ -252,13 +252,11 @@ export const agentGroups = [
 
 Two of those groups come from the app's features and two from the package's adapters: `apolloCommands` adds `apollo.cache` and `apollo.refetch` for looking into the cache directly, which is worth having when `--source cache` and `--source network` disagree and you need to see why.
 
-`App.tsx` loads that file behind `__DEV__` and hands the result to the hook:
+`App.tsx` just calls the hook. Nothing is passed in:
 
 ```tsx
-const agentGroups: CommandGroup[] = __DEV__ ? require("./agent").agentGroups : [];
-
 export default function App() {
-	useAgentBridge(agentGroups);
+	useAgentBridge();
 	return (
 		<ApolloProvider client={apolloClient}>
 			<NavigationContainer ref={navigationRef}>
@@ -269,9 +267,17 @@ export default function App() {
 }
 ```
 
-Both halves of that guard are needed. `agent-bridge` already exports a no-op in production, which drops the hook and the handler; without the `__DEV__` require, a plain import would still pull every command and every description into a release bundle. A release export of this app was checked and contained neither.
+`metro.config.js` wraps its config with `withAgentBridge` from `agent-bridge/metro`, which makes `agent-bridge/groups` resolve to `src/app/agent.ts` in a development bundle and to an empty module in a release bundle:
 
-The array lives at module scope. Built inside the component, it would be a new array on every render, rebuilding the registry and reconnecting the bridge each time; the hook warns once in development when it sees that.
+```js
+module.exports = withAgentBridge(config, { groups: "./src/app/agent.ts" });
+```
+
+Both halves are needed. `agent-bridge` already exports a no-op in production, which drops the hook and the handler; without the resolver swap, the import would pull every command and every description into a release bundle. A release export of this app was checked and contained neither, and a development bundle of it reports all twelve commands.
+
+The swap happens during resolution, before Metro collects dependencies, which is the only place it can happen. Deferring the import at runtime - a lazy `require`, a thunk, a getter - does not help: the dependency edge exists as soon as the specifier appears outside a branch the bundler can fold away, and the whole command tree ships. An app that would rather keep the guard in its own source can write `const agentGroups = __DEV__ ? require("./agent").agentGroups : []`, which works for the same reason and needs no Metro config.
+
+The hook reads the groups through the module the resolver swapped, so there is nothing to pass and nothing to pass wrongly. An earlier version took the array as an argument and had to warn when an app built it during render, which reconnected the bridge on every frame.
 
 ## The protocol, in one paragraph
 

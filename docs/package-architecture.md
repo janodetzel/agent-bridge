@@ -7,7 +7,7 @@ This file started as a scaffolding brief written before the package existed. Wha
 ## What a developer can do with it
 
 1. Define commands in any feature with `import { command, defineCommands } from "agent-bridge/core"`.
-2. Register them in the app with `useAgentBridge(groups)`.
+2. Point `metro.config.js` at them with `withAgentBridge`, and call `useAgentBridge()` in the root component.
 3. Run `pnpm agent-bridge todos.add --title "Buy milk"` and get one JSON document on stdout from the app running in the iOS simulator or the Android emulator.
 4. Open the plugin from Metro's Shift+M menu and run the same commands from a web form.
 
@@ -49,6 +49,9 @@ packages/agent-bridge/
 			SOURCE.md            the Expo versions and files the wire code was copied from
 			MessageFramePacker.ts
 			connection.ts        handshake, plugin filtering, termination
+	metro/
+		index.cjs              withAgentBridge, the Metro config wrapper
+		index.d.ts
 	webui/                   the command console
 	test/
 		core.test.ts
@@ -96,7 +99,8 @@ export function handleRequest(
 
 ```ts
 // src/index.ts
-export function useAgentBridge(groups: CommandGroup[], opts?: HandleOptions): void; // no-op in production
+// Reads the app's groups through the module `withAgentBridge` swaps in. No-op in production.
+export function useAgentBridge(opts?: HandleOptions): void;
 ```
 
 `package.json` exports:
@@ -211,7 +215,21 @@ Defaults: `nav`, `apollo`, `store`, and a 2 second focus timeout.
 
 ## Keeping it out of release builds
 
-`src/index.ts` exports a no-op in production behind a lazy `require`, so a bundler drops the hook and the handler. That is half of it: the app must also load its command groups behind `__DEV__`, or every command and description ships. `test/production-bundle.test.ts` checks the first with esbuild, and `pnpm --filter mobile check:release-bundle` checks a real export of the app for both platforms.
+`src/index.ts` exports a no-op in production behind a lazy `require`, so a bundler drops the hook and the handler. That is half of it: the app's command groups must go too, or every command and description ships.
+
+The package offers `agent-bridge/metro` for the second half:
+
+```js
+// metro.config.js
+const { withAgentBridge } = require("agent-bridge/metro");
+module.exports = withAgentBridge(getDefaultConfig(__dirname), { groups: "./src/app/agent.ts" });
+```
+
+The wrapper installs a `resolveRequest` that replaces the package's own groups module - `build/groups.js`, an empty array - with the app's module whenever `context.dev`. It keys on the resolved file rather than the specifier, so it catches both the hook's own import and an app that imports `agent-bridge/groups` directly. Resolution runs before dependency collection, so nothing the app's groups module imports enters a release bundle. `context.dev` is per bundle, so one config serves `expo start` and `expo export` alike.
+
+An app that skips the wrapper gets the empty fallback and a development-only warning saying so, rather than silence. An app that would rather not touch its Metro config can keep the guard in its own source instead: `const agentGroups = __DEV__ ? require("./agent").agentGroups : []`. Both work for the same reason, and a lazy require in either place does not: the dependency edge is created by the specifier, not by the call.
+
+`test/production-bundle.test.ts` checks the package entry point with esbuild, `test/metro.test.ts` checks the resolver in both directions, and `pnpm --filter mobile check:release-bundle` checks a real export of the app for both platforms.
 
 Keep the strings that check greps for out of user-facing copy, or it turns into noise people learn to ignore.
 

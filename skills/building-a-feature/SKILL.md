@@ -102,8 +102,11 @@ Add the group to `src/app/agent.ts`:
 export const agentGroups = [todosCommands(apolloClient), settingsCommands(settingsStore), …];
 ```
 
-`App.tsx` loads that file behind `__DEV__`, which is what keeps commands and their
-descriptions out of release builds. Leave that guard alone. A new screen also needs
+`metro.config.js` points `withAgentBridge` at this file, and `useAgentBridge()` reads
+it from there - which is why the hook takes no arguments. The swap happens during
+resolution, so a release bundle gets an empty module instead. Leave both ends alone,
+and never "simplify" it into a runtime-deferred import, which ships the whole command
+tree. A new screen also needs
 an entry in `src/navigation/routes.ts` — both in `RootStackParamList` and in the
 `RouteName` enum, which a type test keeps in sync.
 
