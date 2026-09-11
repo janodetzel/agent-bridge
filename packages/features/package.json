@@ -1,0 +1,21 @@
+{
+	"name": "@app/features",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Stores, operation functions, and command factories. Free of React, so the bridge and the UI share one code path.",
+	"main": "src/index.ts",
+	"types": "src/index.ts",
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"agent-bridge": "workspace:*"
+	},
+	"peerDependencies": {
+		"zod": "^4.0.0"
+	},
+	"devDependencies": {
+		"typescript": "~5.9.3",
+		"zod": "^4.6.2"
+	}
+}
