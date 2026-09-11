@@ -3,6 +3,8 @@ import { buildRegistry, handleRequest, PROTOCOL_VERSION, type Registry } from "a
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { apiLink } from "../src/app/api";
+import { newsCommands } from "../src/features/news/commands";
+import { createDismissedNewsStore } from "../src/features/news/store";
 import { settingsCommands } from "../src/features/settings/commands";
 import { createSettingsStore, type SettingsState } from "../src/features/settings/store";
 import { todosCommands } from "../src/features/todos/commands";
@@ -142,5 +144,73 @@ describe("settings commands", () => {
 		await store.getState().load();
 
 		expect(store.getState()).toMatchObject({ units: "mi", notifications: false });
+	});
+});
+
+const memoryDismissedStorage = () => {
+	let saved: string[] | null = null;
+	return {
+		get: async () => saved,
+		set: async (ids: string[]) => {
+			saved = ids;
+		},
+		read: () => saved,
+	};
+};
+
+describe("news commands", () => {
+	let registry: Registry;
+
+	beforeEach(() => {
+		const client = new ApolloClient({ link: apiLink, cache: new InMemoryCache() });
+		registry = buildRegistry([newsCommands(client, createDismissedNewsStore({ storage: memoryDismissedStorage() }))]);
+	});
+
+	it("dismisses an article so it drops out of list", async () => {
+		const before = (await resultOf(registry, "news.list", { source: "network" })) as { id: string }[];
+		const target = before[0]!.id;
+
+		await resultOf(registry, "news.dismiss", { id: target });
+
+		const cached = (await resultOf(registry, "news.list", { source: "cache" })) as { id: string }[];
+		expect(cached.map((a) => a.id)).not.toContain(target);
+		expect(cached.length).toBe(before.length - 1);
+	});
+
+	it("saves the dismissal, so a fresh store reads it back", async () => {
+		const storage = memoryDismissedStorage();
+		const client = new ApolloClient({ link: apiLink, cache: new InMemoryCache() });
+		const store = createDismissedNewsStore({ storage });
+		const commands = buildRegistry([newsCommands(client, store)]);
+
+		const before = (await resultOf(commands, "news.list", { source: "network" })) as { id: string }[];
+		await resultOf(commands, "news.dismiss", { id: before[0]!.id });
+
+		const reloaded = createDismissedNewsStore({ storage });
+		await reloaded.getState().load();
+		expect(reloaded.getState().dismissedIds).toEqual([before[0]!.id]);
+	});
+
+	it("rolls back and fails when the save fails", async () => {
+		const client = new ApolloClient({ link: apiLink, cache: new InMemoryCache() });
+		const store = createDismissedNewsStore({
+			storage: {
+				get: async () => null,
+				set: async () => {
+					throw new Error("disk full");
+				},
+			},
+		});
+		const commands = buildRegistry([newsCommands(client, store)]);
+
+		const response = await call(commands, "news.dismiss", { id: "a1" });
+
+		expect(response).toMatchObject({ ok: false, code: "COMMAND_FAILED", error: "disk full" });
+		expect(store.getState().dismissedIds).toEqual([]);
+	});
+
+	it("rejects an empty id before it reaches the store", async () => {
+		const response = await call(registry, "news.dismiss", { id: "" });
+		expect(response).toMatchObject({ ok: false, code: "INVALID_ARGS" });
 	});
 });

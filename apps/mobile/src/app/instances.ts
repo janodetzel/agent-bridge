@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ApolloClient, InMemoryCache } from "@apollo/client";
 import { createNavigationContainerRef } from "@react-navigation/native";
 
+import { createDismissedNewsStore } from "../features/news/store";
 import { createSettingsStore, type SettingsState } from "../features/settings/store";
 import type { RootStackParamList } from "../navigation/routes";
 import { apiLink } from "./api";
@@ -27,6 +28,19 @@ export const settingsStore = createSettingsStore({
 	},
 });
 
+export const dismissedNewsStore = createDismissedNewsStore({
+	storage: {
+		async get() {
+			const saved = await AsyncStorage.getItem(DISMISSED_NEWS_KEY);
+			return saved ? (JSON.parse(saved) as string[]) : null;
+		},
+		async set(ids) {
+			await AsyncStorage.setItem(DISMISSED_NEWS_KEY, JSON.stringify(ids));
+		},
+	},
+});
+
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const SETTINGS_KEY = "settings";
+const DISMISSED_NEWS_KEY = "news.dismissedIds";

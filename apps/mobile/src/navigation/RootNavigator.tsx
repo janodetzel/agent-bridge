@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Button } from "react-native";
+import { Button, View } from "react-native";
 
+import { NewsScreen } from "../features/news/NewsScreen";
 import { SettingsScreen } from "../features/settings/SettingsScreen";
 import { TodosScreen } from "../features/todos/TodosScreen";
 import { navigationRef } from "../app/instances";
@@ -17,11 +18,15 @@ export function RootNavigator() {
 				options={{
 					title: "Todos",
 					headerRight: () => (
-						<Button title="Settings" onPress={() => navigationRef.navigate("Settings")} />
+						<View style={{ flexDirection: "row", gap: 8 }}>
+							<Button title="News" onPress={() => navigationRef.navigate("News")} />
+							<Button title="Settings" onPress={() => navigationRef.navigate("Settings")} />
+						</View>
 					),
 				}}
 			/>
 			<Stack.Screen name="Settings" component={SettingsScreen} />
+			<Stack.Screen name="News" component={NewsScreen} options={{ title: "News" }} />
 		</Stack.Navigator>
 	);
 }

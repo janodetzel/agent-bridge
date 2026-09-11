@@ -12,8 +12,15 @@ const schema = buildSchema(`
 		title: String!
 		done: Boolean!
 	}
+	type Article {
+		id: ID!
+		title: String!
+		summary: String!
+		publishedAt: String!
+	}
 	type Query {
 		todos: [Todo!]!
+		news: [Article!]!
 	}
 	type Mutation {
 		addTodo(title: String!): Todo!
@@ -30,6 +37,29 @@ const rows: Row[] = [
 	{ id: "2", title: "Drive the app from the CLI", done: false },
 ];
 
+type ArticleRow = { id: string; title: string; summary: string; publishedAt: string };
+
+const articles: ArticleRow[] = [
+	{
+		id: "a1",
+		title: "Metro ships a faster bundler",
+		summary: "Cold starts drop by half in the latest release.",
+		publishedAt: "2026-09-08T09:00:00.000Z",
+	},
+	{
+		id: "a2",
+		title: "React Navigation 8 released",
+		summary: "Typed routes are now the default.",
+		publishedAt: "2026-09-09T09:00:00.000Z",
+	},
+	{
+		id: "a3",
+		title: "Apollo Client adds cache.diagnose",
+		summary: "A new dev-tool for spotting stale cache reads.",
+		publishedAt: "2026-09-10T09:00:00.000Z",
+	},
+];
+
 const find = (id: string): Row => {
 	const row = rows.find((r) => r.id === id);
 	if (!row) throw new Error(`no todo with id ${id}`);
@@ -38,6 +68,8 @@ const find = (id: string): Row => {
 
 const root = {
 	todos: () => rows.map((row) => ({ ...row })),
+
+	news: () => articles.map((article) => ({ ...article })),
 
 	addTodo: ({ title }: { title: string }) => {
 		const row = { id: String(nextId++), title, done: false };

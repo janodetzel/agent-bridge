@@ -5,7 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 
 import { RootNavigator } from "../navigation/RootNavigator";
-import { apolloClient, navigationRef, settingsStore } from "./instances";
+import { apolloClient, dismissedNewsStore, navigationRef, settingsStore } from "./instances";
 
 /**
  * Loaded behind `__DEV__`, so a release build carries neither the commands nor
@@ -23,6 +23,7 @@ export default function App() {
 
 	useEffect(() => {
 		void settingsStore.getState().load();
+		void dismissedNewsStore.getState().load();
 	}, []);
 
 	return (
