@@ -1,50 +1,40 @@
-# agent-bridge package: scaffolding brief
+# The agent-bridge package
 
-This brief tells you how to build `packages/agent-bridge`, an Expo dev tools plugin that lets an AI agent run typed commands against a React Native app in a simulator through a CLI. Read `agent-bridge-architecture.md` first. It explains the app architecture this package serves: Zustand stores, Apollo operation functions, React Navigation, and the three rules the design depends on. This brief does not repeat that content.
+`packages/agent-bridge` is an Expo dev tools plugin that lets an agent run typed commands against a React Native app in a simulator, from a terminal or from a web console. This document describes the package as built. `docs/agent-bridge-architecture.md` describes the app architecture it serves and the three rules the whole design depends on; this one does not repeat them.
 
-## Goal
+This file started as a scaffolding brief written before the package existed. What the brief got wrong is recorded at the end, because those are the parts most likely to trip up the next person.
 
-When you finish, a developer can do the following in the monorepo:
+## What a developer can do with it
 
-1. Define commands in any feature package with `import { command, defineCommands } from "agent-bridge/core"`.
+1. Define commands in any feature with `import { command, defineCommands } from "agent-bridge/core"`.
 2. Register them in the app with `useAgentBridge(groups)`.
-3. Run `pnpm agent-bridge favorites.add --itemId 42` and get one JSON document on stdout from the app running in the iOS simulator or Android emulator.
-4. Open the plugin from the Metro Shift+M menu and run the same commands from a web form.
+3. Run `pnpm agent-bridge todos.add --title "Buy milk"` and get one JSON document on stdout from the app running in the iOS simulator or the Android emulator.
+4. Open the plugin from Metro's Shift+M menu and run the same commands from a web form.
 
-## Non-goals
+All four are verified: the smoke test ran against both an iOS simulator and an Android emulator.
 
-Do not build any of the following. Stop and ask if a task seems to require one of them.
+## Boundaries
 
-- Publishing to npm. The package stays a workspace package.
-- A headless or Node runtime for commands. Commands run only inside the app.
-- Business commands such as `favorites.add`. The app team writes those. You write one sample group for the smoke test.
-- An adapter that turns store actions into commands automatically.
-- Support for Expo SDK versions below 53.
+- The package stays a workspace package. It is not published.
+- Commands run only inside the app. There is no headless runtime.
+- Business commands belong to the app team. The package ships the adapters and the sample todo and settings groups in `apps/mobile`.
+- No adapter turns store actions into commands automatically.
+- Expo SDK 53 or later; developed and tested against 57.
 
-## Constraints
-
-- Location: `packages/agent-bridge` in the existing pnpm workspace.
-- Language: TypeScript with `strict: true`.
-- `src/core/**` must not import `react`, `react-native`, `expo`, `expo-*`, `@react-navigation/*`, `@apollo/client`, or `zustand`. Feature packages import `agent-bridge/core` and must stay free of React.
-- `src/adapters/**` may import only its own library and `src/core`.
-- The production bundle must not contain the bridge. `src/index.ts` exports a no-op in production, following the pattern in the Expo guide.
-- Do not write the Expo wire format from memory. Copy it from the installed `expo` package (task 4).
-
-## Package layout
-
-Create this layout. File names are binding. Internal helpers may be added freely.
+## Layout
 
 ```
 packages/agent-bridge/
 	src/
 		core/
-			index.ts             re-exports the public core API
+			index.ts             the public core API
 			command.ts           command(), defineCommands(), buildRegistry(), types
 			handle.ts            handleRequest()
 			serialize.ts         toJsonSafe()
 			protocol.ts          Request, Response, PROTOCOL_VERSION, PLUGIN_NAME
 		app/
 			useAgentBridge.ts    connects a registry to expo/devtools
+			attach.ts            the same, without React, for tests and the fake app peer
 		adapters/
 			react-navigation.ts
 			apollo.ts
@@ -54,39 +44,35 @@ packages/agent-bridge/
 		index.ts               entry point of the agent-bridge binary
 		client.ts              connection, request IDs, timeouts
 		flags.ts               JSON Schema to CLI flags
+		tsconfig.json          builds cli/ to build/cli as CommonJS
 		wire/
-			SOURCE.md            expo version and file paths the wire code was copied from
-			...                  copied frame packer and handshake code
-	webui/                   scaffolded by create-dev-plugin, then replaced (task 7)
+			SOURCE.md            the Expo versions and files the wire code was copied from
+			MessageFramePacker.ts
+			connection.ts        handshake, plugin filtering, termination
+	webui/                   the command console
 	test/
 		core.test.ts
+		app.test.ts
 		adapters.test.ts
 		cli.integration.test.ts
-		fake-broadcaster.ts    a local copy of Expo's broadcast endpoint for tests
+		production-bundle.test.ts
+		fake-broadcaster.ts    a local copy of Expo's broadcast endpoint, plus a fake app peer
 	expo-module.config.json  generated by create-dev-plugin
-	package.json
-	README.md
 ```
+
+`src/core` imports no UI or state library, so it runs in the app, in the CLI, and in tests. Each adapter imports only its own library and core. dependency-cruiser enforces both.
 
 ## Public API
 
-These signatures are the contract. Implement them exactly.
-
 ```ts
 // src/core/command.ts
-import type { z } from "zod";
-
 export type Command<A extends z.ZodTypeAny = z.ZodTypeAny, R = unknown> = {
 	description: string;
 	args: A;
 	run: (args: z.infer<A>) => Promise<R>;
 };
 
-export type CommandGroup = {
-	namespace: string;
-	commands: Record<string, Command>;
-};
-
+export type CommandGroup = { namespace: string; commands: Record<string, Command> };
 export type Registry = ReadonlyMap<string, Command>;
 
 export function command<A extends z.ZodTypeAny, R>(c: Command<A, R>): Command<A, R>;
@@ -101,7 +87,6 @@ export function buildRegistry(groups: CommandGroup[]): Registry;
 ```ts
 // src/core/handle.ts
 export type HandleOptions = { defaultTimeoutMs?: number }; // default 10_000
-
 export function handleRequest(
 	registry: Registry,
 	req: Request,
@@ -111,7 +96,7 @@ export function handleRequest(
 
 ```ts
 // src/index.ts
-export function useAgentBridge(groups: CommandGroup[]): void; // no-op when NODE_ENV === "production"
+export function useAgentBridge(groups: CommandGroup[], opts?: HandleOptions): void; // no-op in production
 ```
 
 `package.json` exports:
@@ -120,18 +105,20 @@ export function useAgentBridge(groups: CommandGroup[]): void; // no-op when NODE
 | ------------------------------- | ------------------------------------ | ---------------- |
 | `agent-bridge`                  | `build/index.js`                     | yes              |
 | `agent-bridge/core`             | `build/core/index.js`                | no               |
+| `agent-bridge/protocol`         | `build/core/protocol.js`             | no               |
 | `agent-bridge/react-navigation` | `build/adapters/react-navigation.js` | no               |
 | `agent-bridge/apollo`           | `build/adapters/apollo.js`           | no               |
 | `agent-bridge/zustand`          | `build/adapters/zustand.js`          | no               |
 
-Declare `expo`, `react`, and `zod` (version 4) as peer dependencies. Declare `@react-navigation/native`, `@apollo/client`, and `zustand` as optional peer dependencies. Add `"bin": { "agent-bridge": "./build/cli/index.js" }`.
+`expo`, `react`, and `zod` (version 4) are peer dependencies. `@react-navigation/native`, `@apollo/client`, and `zustand` are optional peers. `ws` is the one runtime dependency, used by the CLI. The binary is `"agent-bridge": "./build/cli/index.js"`.
+
+`agent-bridge/protocol` is not in the original brief. The web console needs the message names and the version but not the handler, and importing `core` would drag Zod into the console bundle.
 
 ## Protocol
 
-The plugin name is `agent-bridge`. Requests use the message method `request`. Responses use `response`.
+The plugin name is `agent-bridge`. Requests use the message method `request`, responses `response`.
 
 ```ts
-// src/core/protocol.ts
 export const PLUGIN_NAME = "agent-bridge";
 export const PROTOCOL_VERSION = 1;
 
@@ -149,11 +136,7 @@ export type Request =
 
 export type CommandInfo = { name: string; description: string; args: object }; // args is JSON Schema
 
-export type Response = {
-	id: string;
-	clientId: string;
-	protocolVersion: number;
-} & (
+export type Response = { id: string; clientId: string; protocolVersion: number } & (
 	| { ok: true; result: unknown; durationMs?: number }
 	| { ok: false; error: string; code: ErrorCode; issues?: unknown[] }
 );
@@ -167,229 +150,97 @@ export type ErrorCode =
 	| "PROTOCOL_MISMATCH";
 ```
 
-Behavior of `handleRequest`:
+`handleRequest`:
 
-1. If `req.protocolVersion !== PROTOCOL_VERSION`, return `PROTOCOL_MISMATCH` and name both versions in `error`.
-2. For `commands`, return a `CommandInfo[]` sorted by name. Generate `args` with `z.toJSONSchema`.
-3. For `run`, look up the command. If it is missing, return `UNKNOWN_COMMAND`.
-4. Parse `args` with `safeParse`. Treat a missing `args` as `{}`. On failure, return `INVALID_ARGS` with the Zod issues.
-5. Await `run` with the timeout. On timeout, return `TIMEOUT`. On a thrown error, return `COMMAND_FAILED` with the error message.
-6. Pass the result through `toJsonSafe`. On failure, return `NOT_SERIALIZABLE` with the path of the first bad value, for example `result.items[3].createdAt`.
-7. Copy `id` and `clientId` from the request into every response.
+1. A request whose `protocolVersion` differs answers `PROTOCOL_MISMATCH`, naming both versions.
+2. `commands` returns `CommandInfo[]` sorted by name, with `args` from `z.toJSONSchema`.
+3. `run` looks the command up; a miss is `UNKNOWN_COMMAND`.
+4. Arguments are parsed with `safeParse`, treating a missing `args` as `{}`. A failure is `INVALID_ARGS` with the Zod issues.
+5. `run` is awaited with the timeout. A timeout answers `TIMEOUT` immediately and leaves the command to settle on its own; a throw is `COMMAND_FAILED` with the message.
+6. The result goes through `toJsonSafe`. A failure is `NOT_SERIALIZABLE` with the path of the first bad value, for example `result.items[3].createdAt`.
+7. Every response carries the `id` and `clientId` of its request.
 
-Rules for `toJsonSafe`:
+`toJsonSafe`: `Date` becomes an ISO string; `undefined` is dropped from objects and becomes `null` at the top level or in an array; `Map`, `Set`, functions, symbols, `BigInt`, `NaN`, `Infinity`, and cycles fail with the path.
 
-- `Date` becomes an ISO string.
-- `undefined` inside an object is dropped. `undefined` at the top level becomes `null`.
-- `Map`, `Set`, functions, symbols, `BigInt`, and cycles fail with the path of the value.
-- `NaN` and `Infinity` fail with the path.
+Schemas are generated with `io: "input"`, so an argument with `.default()` stays optional for the caller, and with `unrepresentable: "any"`, so one exotic argument type cannot take the whole listing down.
 
 ### Multiple clients
 
-Expo's endpoint at `/expo-dev-plugins/broadcast` forwards every message to every other connected client. The CLI and the web UI can both be connected, so both receive every response. Every client must drop responses whose `clientId` is not its own.
+Expo's endpoint at `/expo-dev-plugins/broadcast` forwards every message to every other connected client. Both the CLI and the console can receive a response meant for the other, so every client drops responses whose `clientId` is not its own.
 
-## Tasks
-
-Do the tasks in order. Each task ends with checks that must pass before you start the next task. Report the result of each check.
-
-### 1. Scaffold and restructure
-
-1. Run `pnpm create dev-plugin` in `packages/`. Use the name `agent-bridge`, and use `useAgentBridge` as the hook name.
-2. Keep the generated `expo-module.config.json` and the build scripts. Do not edit the config by hand.
-3. Move the generated hook into the layout above.
-4. Add the `exports`, `bin`, and peer dependencies from the public API section.
-5. Add a dependency-cruiser rule that fails if `src/core/**` or `src/adapters/**` imports anything forbidden by the constraints.
-
-Checks:
-
-- `pnpm --filter agent-bridge build:all` succeeds.
-- `pnpm depcruise` passes.
-- `build/` contains a file for each entry in the exports table.
-
-### 2. Core
-
-Implement `command.ts`, `protocol.ts`, `serialize.ts`, and `handle.ts`.
-
-Checks, as tests in `test/core.test.ts`:
-
-- `buildRegistry` throws on a duplicate key and names the key.
-- `defineCommands` throws on an invalid namespace.
-- Each error code in `ErrorCode` has at least one test that produces it.
-- A command that resolves after the timeout returns `TIMEOUT`, and the handler does not wait for it.
-- A result containing a `Date` comes back as an ISO string.
-- A result containing a `Map` returns `NOT_SERIALIZABLE` with the correct path.
-- `commands` returns JSON Schema for a schema that uses `z.enum`, `z.string().min(1)`, and `.default()`.
-
-### 3. App hook
-
-Implement `src/app/useAgentBridge.ts`:
-
-- Call `useDevToolsPluginClient(PLUGIN_NAME)`.
-- Build the registry with `useMemo` keyed on `groups`.
-- On each `request` message, call `handleRequest` and send the response with `sendMessage("response", response)`.
-- Remove the listener on unmount and when the client or the registry changes.
-- In development, log a warning once if `groups` changes identity between renders. That warning catches an array defined inside a component.
-
-Implement `src/index.ts` with the production no-op, following the pattern in the Expo guide for creating dev tools plugins.
-
-Checks:
-
-- A test with a mocked `expo/devtools` shows that a `request` produces exactly one `response` with the matching `id` and `clientId`.
-- With `NODE_ENV=production`, bundle a test entry that imports `agent-bridge`, and search the output for `useDevToolsPluginClient`. It must not appear.
-
-### 4. Wire format and CLI client
-
-The CLI talks to the same endpoint as the web UI and must look like a browser-side plugin client to the app.
-
-1. Find the dev tools client sources in the installed package, under `node_modules/expo/src/devtools/` or `node_modules/expo/build/devtools/`.
-2. Copy the frame packer (`MessageFramePacker`) and the browser-side handshake logic (see `DevToolsPluginClientImplBrowser` or the file that now holds it) into `cli/wire/`. Adapt them to Node 20 or later. Node has a global `WebSocket` from version 22. For Node 20, use the `ws` package.
-3. Write `cli/wire/SOURCE.md` with the `expo` version and the exact source file paths.
-4. Implement `cli/client.ts`:
-   - Connect to `ws://<host>:<port>/expo-dev-plugins/broadcast`. The defaults are `localhost` and `8081`.
-   - Generate one `clientId` per process.
-   - Send requests with a unique `id`, and resolve on the response with the matching `id` and `clientId`.
-   - Fail with a connection error if no connection opens within 3 seconds, or if no response arrives for `commands` within 3 seconds. The second case means the app is not connected.
-
-Build `test/fake-broadcaster.ts`, a local WebSocket server that forwards each message to all other clients, the same as Expo's endpoint. Run a fake app peer against it that uses the copied wire code and `handleRequest`.
-
-Checks, in `test/cli.integration.test.ts`:
-
-- The client receives `commands` from the fake app peer.
-- Two clients run requests at the same time, and each receives only its own responses.
-- With no app peer connected, the client fails within 4 seconds.
-
-If the handshake in the installed Expo version differs from this brief, follow the installed source and record the difference in `SOURCE.md`.
-
-### 5. CLI commands
-
-Usage:
+## The CLI
 
 ```
 agent-bridge commands
 agent-bridge <namespace>.<name> [--<arg> <value> ...]
 agent-bridge <namespace>.<name> --args '<json>'
-Global options: --host, --port, --timeout <ms>, --pretty
+Global options: --host, --port, --timeout <ms>, --pretty, --help
 ```
 
-- On every call, fetch `commands` first and build flags from the JSON Schema of the requested command.
-- Map schema types to flags: `string` takes the raw value, `number` and `integer` are parsed, `boolean` accepts `--flag` and `--no-flag`, and `enum` checks the value against the list.
-- For `object` and `array` arguments, require `--args` with JSON. Do not invent a flag syntax.
-- `--args` and individual flags cannot be combined. Exit with code 1 and a message if both are given.
-- Validate locally only what the flag parser needs. The app is the source of truth for validation.
+On every call the CLI fetches `commands` first and builds the flags from the JSON Schema of the requested command, so a new command works after a Metro reload with no CLI rebuild. Strings take the raw value, `number` and `integer` are parsed, a boolean is `--flag` or `--no-flag`, and an enum is checked against its values. Object and array arguments have no flag syntax: pass `--args` with JSON, which cannot be combined with individual flags. The CLI validates only what the flag parser needs; the app owns validation.
 
-Output:
+stdout holds exactly one JSON document per call - the result, or `{ error, code, issues }` - and `--pretty` indents it. `--help` is the one exception. stderr holds diagnostics. Exit code 0 means success, 1 means the command failed or the call was wrong, and 2 means a connection failure or a protocol mismatch.
 
-- stdout holds exactly one JSON document: the `result` on success, or `{ "error", "code", "issues" }` on failure. `--pretty` indents it.
-- stderr holds human-readable diagnostics.
-- Exit code 0 means success. Exit code 1 means an error response from the app, or a usage error. Exit code 2 means a connection error or a protocol mismatch.
-- On `PROTOCOL_MISMATCH`, print both versions and say which side to update.
+`cli/` compiles to CommonJS into `build/cli`, because `src/` builds as ESM and Node would refuse to run it. The build also emits `build/src/core/protocol.js`, the CLI's CommonJS copy of the protocol constants.
 
-Checks:
+## The wire format
 
-- The integration tests cover each exit code.
-- `agent-bridge commands` against the fake app peer prints valid JSON that `jq .` accepts.
+`cli/wire/` is copied from the installed Expo packages, never written from memory: the format is internal to Expo and has changed before. `cli/wire/SOURCE.md` records the exact versions and files, what was adapted, what was deliberately left out, and the protocol as observed.
 
-### 6. Adapters
+**After every Expo SDK upgrade:** re-read the files listed in `SOURCE.md`. If they changed, recopy them, update the versions and paths there, and rerun the integration tests and the simulator smoke test. Pin the `expo` peer range to the tested SDK.
 
-Each adapter exports one factory that returns a `CommandGroup`.
-
-`agent-bridge/react-navigation`:
+## Adapters
 
 ```ts
-export function navigationCommands(
-	ref: NavigationContainerRefWithCurrent<any>,
-	opts: { routes: z.ZodEnum<any>; namespace?: string; focusTimeoutMs?: number }, // defaults "nav", 2000
-): CommandGroup;
+navigationCommands(ref: NavigationRef, opts: { routes: z.ZodEnum; namespace?: string; focusTimeoutMs?: number }): CommandGroup
+apolloCommands(client: ApolloClient, opts?: { namespace?: string }): CommandGroup
+zustandInspect(stores: Record<string, StoreApi<object>>, opts?: { namespace?: string }): CommandGroup
 ```
 
-- `current` returns `{ name, params }` of the focused route, or `null`.
-- `navigate` takes `{ screen, params? }`. It throws if the ref is not ready. It waits until the focused route name equals `screen` and throws when `focusTimeoutMs` passes. `navigate()` with an unknown route does not throw in React Navigation, so the wait is the only failure signal.
-- `back` throws if `canGoBack()` is false.
+Defaults: `nav`, `apollo`, `store`, and a 2 second focus timeout.
 
-`agent-bridge/apollo`:
+- `nav.current` returns the focused route and its params, or `null`. `nav.navigate` throws if the ref is not ready and waits for the route to become focused, because React Navigation does not throw for an unknown route. `nav.back` throws when there is nothing to go back to.
+- `apollo.cache` requires a prefix of at least one character: a full dump of a real app's cache is megabytes of noise in an agent's context. `apollo.refetch` takes operation names and returns the ones that ran.
+- `store.get` takes a store name as an enum of the record's keys and returns the state with functions removed. The adapter is read-only by design.
 
-```ts
-export function apolloCommands(
-	client: ApolloClient<any>,
-	opts?: { namespace?: string },
-): CommandGroup; // default "apollo"
-```
+## The web console
 
-- `cache` takes a required `prefix` with at least one character. It returns the entries of `client.cache.extract()` whose key starts with the prefix.
-- `refetch` takes `{ operations: string[] }` and calls `client.refetchQueries({ include: operations })`. It returns the operation names that ran.
+`webui/` is an Expo web app served by Metro from `dist/`. It sends `commands` on load, lists them by namespace, renders a form from each command's JSON Schema - text fields, a checkbox, enum buttons, a JSON text area for objects and arrays - and shows the response with its duration, or the error code and the Zod issues. It carries its own `clientId` and drops responses belonging to another client.
 
-`agent-bridge/zustand`:
+`pnpm --filter agent-bridge web:export` builds it; Metro then serves it at `/_expo/plugins/agent-bridge`. `pnpm --filter agent-bridge web:dev` runs it with fast refresh on its own port, where it needs `?devServer=localhost:8081` to know which app to talk to.
 
-```ts
-export function zustandInspect(
-	stores: Record<string, StoreApi<any>>,
-	opts?: { namespace?: string },
-): CommandGroup; // default "store"
-```
+## Keeping it out of release builds
 
-- `get` takes `{ store }` as an enum of the record keys. It returns the state with all function values removed.
-- The adapter is read-only. It exposes no command that calls `setState` or a store action.
+`src/index.ts` exports a no-op in production behind a lazy `require`, so a bundler drops the hook and the handler. That is half of it: the app must also load its command groups behind `__DEV__`, or every command and description ships. `test/production-bundle.test.ts` checks the first with esbuild, and `pnpm --filter mobile check:release-bundle` checks a real export of the app for both platforms.
 
-Checks, in `test/adapters.test.ts`, with real library instances and no React rendering:
+Keep the strings that check greps for out of user-facing copy, or it turns into noise people learn to ignore.
 
-- `navigate` to an unregistered route fails with a timeout error.
-- `cache` without a prefix returns `INVALID_ARGS` through `handleRequest`.
-- `get` on a store with actions returns no functions.
+## Tests
 
-### 7. Web UI
+| File                        | What it covers                                                                                                                                                                                       |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core.test.ts`              | Registry building, every error code, the timeout not waiting on a slow command, serialization and its paths, JSON Schema generation                                                                  |
+| `app.test.ts`               | A request produces exactly one response with the matching `id` and `clientId`, and listening stops on detach                                                                                         |
+| `adapters.test.ts`          | Real library instances through `handleRequest`, including navigate timing out and `apollo.cache` rejecting a missing prefix                                                                          |
+| `cli.integration.test.ts`   | The built binary against the fake broadcaster: every exit code, two clients receiving only their own responses, being dropped when a second client connects, and `commands` output that `jq` accepts |
+| `production-bundle.test.ts` | `useDevToolsPluginClient` absent from a production bundle, present in a development one                                                                                                              |
 
-Replace the scaffolded `webui` app with a command console:
+`test/fake-broadcaster.ts` reproduces Metro's endpoint and a fake app peer that behaves like the real one, including dropping a browser client when a second hands shakes. Options exist to turn that off for tests that need two clients at once; the production client does not work around it.
 
-- On load, send `commands` and list the commands grouped by namespace.
-- For a selected command, render a form from its JSON Schema: text fields for strings and numbers, a checkbox for booleans, a select for enums, and a JSON text area for objects and arrays.
-- Show the response as formatted JSON, the `durationMs`, and the error code on failure.
-- Use a `clientId` and drop responses that belong to other clients.
+## Answers to the questions the brief left open
 
-Checks:
+**What handshake does the installed Expo version send from the browser side?** Recorded in `cli/wire/SOURCE.md`: a plain JSON string carrying `protocolVersion`, `pluginName`, `method: "handshake"`, a `browserClientId` (Expo uses `Date.now().toString()`), and `__isHandshakeMessages: true`.
 
-- `pnpm --filter agent-bridge web:dev` runs the console in the browser.
-- Run the CLI and the web UI against the same app at the same time. Record in `SOURCE.md` whether the app keeps both clients or drops one when the second connects. Do not work around a dropped client. Report it.
+**Does the app keep several browser-side clients of one plugin?** No. It keeps one per plugin and sends `terminateBrowserClient` to the previous one, which closes itself. Confirmed against a running app, not only read from the source. The CLI reports it and exits 2 rather than reconnecting behind your back. There is a second consequence the brief did not anticipate: every connected _app_ also answers, so with a simulator and an emulator on one Metro a command runs on both.
 
-### 8. Integrate and smoke test
+**Does Metro resolve the subpath exports without extra config?** Yes. The app imports `agent-bridge`, `agent-bridge/core`, and `agent-bridge/react-navigation`, and bundles on both platforms with no resolver configuration beyond the standard monorepo `metro.config.js`.
 
-1. In `apps/mobile`, add a sample group `demo` with `echo` (returns its arguments) and `fail` (throws). Define the group array at module scope and call `useAgentBridge(groups)` in the root component.
-2. Add `navigationCommands` with the app's route enum.
-3. Start Metro and the iOS simulator. Run:
+**Does `z.toJSONSchema` produce schemas the console and the flag parser can handle?** For every sample command, yes: `z.enum` becomes `enum`, `z.string().min(1)` becomes `minLength`, `z.number().int()` becomes `integer`, `z.record` becomes an object with `additionalProperties`. Types JSON Schema cannot express - `z.date()`, `z.bigint()`, `z.map()` - become `{}` under `unrepresentable: "any"`; they render as a text field and must be sent with `--args`. Prefer argument types that survive JSON, such as an ISO string instead of a `Date`.
 
-```
-pnpm agent-bridge commands
-pnpm agent-bridge demo.echo --args '{"hello":"world"}'
-pnpm agent-bridge demo.fail
-pnpm agent-bridge nav.navigate --screen <an existing route>
-pnpm agent-bridge nav.navigate --screen DoesNotExist
-```
+## Where the original brief was wrong
 
-4. On Android, run `adb reverse tcp:8081 tcp:8081` first, then repeat the commands.
-5. Build a release export and search the bundle for `agent-bridge` and `useDevToolsPluginClient`. Neither may appear.
-
-Checks: record the output and exit code of each command. The expected exit codes are 0, 0, 1, 0, 1.
-
-### 9. Documentation
-
-Write `README.md` for developers. Cover installation in the workspace, defining a command, registering groups, the CLI usage, exit codes, the adapters, and the maintenance rule for `cli/wire/`.
-
-Add a section named "Verifying behavior in the simulator" to the repo's `CLAUDE.md`. Take the content from the "How the agent uses it" section of `agent-bridge-architecture.md`, and update command names to the `<namespace>.<name>` form.
-
-## Open questions to answer while you work
-
-Report an answer for each question. Do not guess.
-
-1. What exact handshake does the installed Expo version send from the browser side? Record it in `SOURCE.md`.
-2. Does the app keep several browser-side clients of one plugin connected at the same time?
-3. Does Metro in this repo resolve the package subpath exports without extra config?
-4. Does `z.toJSONSchema` produce schemas the web UI form and the CLI flag parser can handle for every sample command? List any unsupported constructs.
-
-## Maintenance rule
-
-`cli/wire/` depends on internal Expo code. After every Expo SDK upgrade, repeat task 4 step 1 to 3 if the source files changed, and rerun the smoke test in task 8. Pin the `expo` peer dependency to the tested SDK range.
-
-## Suggested skills
-
-- `technical-writing` for `README.md` and the `CLAUDE.md` section.
-- `unslop` on every Markdown file you write.
-- `frontend-design` for the web UI console in task 7.
+- **The dev tools client moved.** The brief points at `node_modules/expo/src/devtools/` or `build/devtools/`. In SDK 57 neither exists: the client lives in `@expo/devtools`, and `expo/devtools` is a one-line re-export. `DevToolsPluginClientImplBrowser` is still there, under the new package.
+- **`bin` and the expo-module convention disagree.** The brief specifies `./build/cli/index.js`, which is what the package uses, while `expo-module-scripts` cleans and builds a subdirectory as `cli/build`. The mismatch is harmless because the root clean removes all of `build/`, but `expo-module build cli` had to be added to the package's `build` script explicitly - `expo-module build` alone does not touch it, which makes a CLI change look like it did nothing.
+- **`@apollo/client/core` is version 3 advice.** In Apollo Client 4 the root entry point is React-free and the hooks live under `@apollo/client/react`. The dependency rule is written against `/react`, not against the root.
+- **Feature packages.** The brief and the architecture document assumed `packages/features`. The example app keeps its features inside the app instead, and the "no React in logic files" boundary is an ESLint rule on file names. The package split remains the right first move if this becomes a product.
+- **dependency-cruiser rules need a planted violation.** Rules matching on `dependencyTypes` silently exempted imports of undeclared packages, and an `exclude` of `node_modules` silently removed every npm dependency from the graph. Both produced a green run that checked nothing. The rules now match resolved paths, and a rule change is not trusted until a deliberate violation fails.

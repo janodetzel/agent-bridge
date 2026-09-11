@@ -1,6 +1,6 @@
 # About the agent-bridge architecture
 
-This document describes an Expo app whose business logic an AI agent can drive through a CLI. The agent calls commands such as `getFavorites`, `addFavorite`, and `navigate` against the app running in a simulator. Each command runs the same code, on the same instances, as a tap in the UI.
+This document describes an Expo app whose business logic an AI agent can drive through a CLI. The agent calls commands such as `todos.add`, `settings.setUnits`, and `nav.navigate` against the app running in a simulator. Each command runs the same code, on the same instances, as a tap in the UI.
 
 The app uses three state holders:
 
@@ -8,21 +8,24 @@ The app uses three state holders:
 - Apollo's `InMemoryCache` holds server state.
 - React Navigation holds navigation state.
 
-A dev tools plugin called `agent-bridge` connects the CLI to the app through Metro.
+A dev tools plugin called `agent-bridge` connects the CLI to the app through Metro. `docs/package-architecture.md` describes that package; this document describes the app around it.
 
 ## How the pieces fit
 
 ```
-agent ─▶ agent-bridge CLI ─▶ Metro (/expo-dev-plugins/broadcast) ─▶ app in simulator
-                                                                     │
-                                                                     ▼
-                                                             command registry
-                                                   ┌─────────────────┼──────────────────┐
-                                                   ▼                 ▼                  ▼
-                                            Zustand stores     Apollo operations    navigationRef
-                                                   │                 │                  │
-                                                   └──── same instances the UI uses ────┘
+agent ─▶ agent-bridge CLI ─┐
+                           ├─▶ Metro (/expo-dev-plugins/broadcast) ─▶ app in simulator
+web console ───────────────┘                                          │
+                                                                      ▼
+                                                              command registry
+                                                    ┌─────────────────┼──────────────────┐
+                                                    ▼                 ▼                  ▼
+                                             Zustand stores     Apollo operations    navigationRef
+                                                    │                 │                  │
+                                                    └──── same instances the UI uses ────┘
 ```
+
+The CLI and the web console are the same kind of client to the app, and the app keeps only one of them at a time. See "Limits" at the end.
 
 ## Three rules the design depends on
 
@@ -32,32 +35,33 @@ Everything else in this document is a consequence of these rules. If one of them
 2. **Commands call the same functions as the UI.** A command never contains its own business logic. It validates arguments, calls a store action or an operation function, and returns the result. If the UI and a command reach the same goal through different code, the agent tests the wrong path.
 3. **Every async action returns a promise that resolves when the work is done, and rejects when it fails.** A single fire-and-forget call breaks verification, because the command reports success before the save runs. `@typescript-eslint/no-floating-promises` catches most violations.
 
-## Package layout
+## Repo layout
 
-The repo is a pnpm workspace.
+The repo is a pnpm workspace with one package and one app.
 
 ```
 packages/
-	features/        Stores, operation functions, GraphQL documents, command factories.
-	agent-protocol/  The command type, request and response types, the request handler.
-	agent-bridge/    The Expo dev tools plugin (app hook) and the CLI.
+	agent-bridge/    The dev tools plugin: core protocol, app hook, adapters, CLI, web console.
 apps/
 	mobile/
 		src/
-			deps/        Concrete dependencies: ApolloClient, repositories, clock.
-			navigation/  Navigators and navigationRef.
-			agent/       Navigation commands, debug commands, the registry.
-			screens/     Views.
+			app/         App.tsx, instances.ts, agent.ts, api.ts
+			features/
+				todos/     api.ts, commands.ts, TodosScreen.tsx
+				settings/  store.ts, commands.ts, SettingsScreen.tsx
+			navigation/  routes.ts, RootNavigator.tsx
 ```
 
-`packages/features` never imports `react`, `react-native`, `expo-*`, or `@react-navigation/*`. It may import `@apollo/client/core`, which has no React dependency. Enforce the rule with dependency-cruiser in CI.
+A feature holds its logic and its UI side by side. `src/app/instances.ts` is the only file that creates instances, which is what rule 1 reduces to in practice.
+
+An earlier draft of this document put the features in their own package, `packages/features`, with dependency-cruiser forbidding React there. That split is the next step if this becomes a product; it is not what an example app needs. What remains of it is a lint rule on file names, described under "What keeps this honest".
 
 ## Client state: Zustand vanilla stores
 
 A store is a factory that takes its dependencies. The app creates one instance, and views and commands both use it.
 
 ```ts
-// packages/features/src/settings/store.ts
+// src/features/settings/store.ts
 import { createStore } from "zustand/vanilla";
 
 export type SettingsState = { units: "km" | "mi"; notifications: boolean };
@@ -65,11 +69,12 @@ export type SettingsState = { units: "km" | "mi"; notifications: boolean };
 export type SettingsActions = {
 	load(): Promise<void>;
 	setUnits(units: SettingsState["units"]): Promise<void>;
+	setNotifications(notifications: boolean): Promise<void>;
 };
 
-export interface SettingsDeps {
+export type SettingsDeps = {
 	storage: { get(): Promise<SettingsState | null>; set(s: SettingsState): Promise<void> };
-}
+};
 
 export const createSettingsStore = (deps: SettingsDeps) =>
 	createStore<SettingsState & SettingsActions>()((set, get) => ({
@@ -82,103 +87,85 @@ export const createSettingsStore = (deps: SettingsDeps) =>
 		},
 
 		async setUnits(units) {
-			const previous = get().units;
-			set({ units });
-			try {
-				await deps.storage.set({ units, notifications: get().notifications });
-			} catch (e) {
-				set({ units: previous });
-				throw e;
-			}
+			await update(set, get, deps, { units });
+		},
+
+		async setNotifications(notifications) {
+			await update(set, get, deps, { notifications });
 		},
 	}));
 
 export type SettingsStore = ReturnType<typeof createSettingsStore>;
 ```
 
-Two conventions replace the discipline that a reducer architecture would enforce:
+The shared `update` helper sets the new value, saves, and on failure rolls back and rethrows. Two conventions replace the discipline that a reducer architecture would enforce:
 
-- Only store files call `set`. A lint rule on `set(` outside `**/store.ts` enforces this.
+- Only store files call `set`. This one is a convention, not a lint rule.
 - An optimistic update rolls back and rethrows on failure. The rethrow is what makes the command fail.
 
 Views read with `useStore(settingsStore, (s) => s.units)` and call `settingsStore.getState().setUnits("mi")`, the same method the command calls.
 
-Inject a `clock` dependency where a store writes timestamps. A store that calls `Date.now()` directly produces different results on every test run.
+Inject a `clock` dependency where a store writes timestamps. A store that calls `Date.now()` directly produces different results on every test run, and a lint rule rejects it in a feature's logic files.
 
 ## Server state: Apollo operation functions
 
 Apollo's cache is the store for server data. Do not copy server data into Zustand.
 
-The cache-update logic lives in one operation function per mutation. The operation function takes the client as an argument and has no React imports. The UI and the command both call it. If the UI instead uses `useMutation(ADD_FAVORITE, { update })` with its own `update`, the UI and the command update the cache in two different ways.
+The cache-update logic lives in one operation function per mutation. The operation function takes the client as an argument and has no React imports. The UI and the command both call it. If the UI instead uses `useMutation(ADD_TODO, { update })` with its own `update`, the UI and the command update the cache in two different ways.
 
 ```ts
-// packages/features/src/favorites/api.ts
-import type { ApolloClient, NormalizedCacheObject } from "@apollo/client/core";
-import { ADD_FAVORITE, REMOVE_FAVORITE, FAVORITES, FAVORITE_FIELDS } from "./documents";
+// src/features/todos/api.ts
+import type { ApolloClient, Reference } from "@apollo/client";
 
-type Client = ApolloClient<NormalizedCacheObject>;
-
-export async function addFavorite(client: Client, itemId: string) {
-	const { data, errors } = await client.mutate({
-		mutation: ADD_FAVORITE,
-		variables: { itemId },
+export async function addTodo(client: ApolloClient, title: string): Promise<Todo> {
+	const { data, error } = await client.mutate({
+		mutation: ADD_TODO,
+		variables: { title },
 		update(cache, { data }) {
-			if (!data) return;
+			const added = data?.addTodo;
+			if (!added) return;
 			cache.modify({
 				fields: {
-					favorites(existing = []) {
-						const ref = cache.writeFragment({ data: data.addFavorite, fragment: FAVORITE_FIELDS });
-						return [...existing, ref];
+					todos(existing: readonly Reference[] = []): readonly Reference[] {
+						const ref = cache.writeFragment({ data: added, fragment: TODO_FIELDS });
+						return ref ? [...existing, ref] : existing;
 					},
 				},
 			});
 		},
 	});
-	if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
-	return data!.addFavorite;
+	if (error) throw error;
+	return data.addTodo;
 }
 
-export async function removeFavorite(client: Client, itemId: string) {
-	const { errors } = await client.mutate({
-		mutation: REMOVE_FAVORITE,
-		variables: { itemId },
-		update(cache) {
-			cache.evict({ id: cache.identify({ __typename: "Favorite", itemId }) });
-			cache.gc();
-		},
-	});
-	if (errors?.length) throw new Error(errors.map((e) => e.message).join("; "));
-}
-
-export async function getFavorites(client: Client, source: "cache" | "network") {
+export async function getTodos(client: ApolloClient, source: "cache" | "network"): Promise<Todo[]> {
 	const { data } = await client.query({
-		query: FAVORITES,
+		query: TODOS,
 		fetchPolicy: source === "cache" ? "cache-only" : "network-only",
 	});
-	return data?.favorites ?? [];
+	return data?.todos ?? [];
 }
 ```
 
-The explicit `errors` check matters. With `errorPolicy: "none"`, the default, `mutate` throws on GraphQL errors. With `errorPolicy: "all"`, it resolves and puts the errors in `result.errors`. The check makes the function throw under either policy.
+The explicit `error` check matters. With `errorPolicy: "none"`, the default, a GraphQL error rejects. With `errorPolicy: "all"`, it resolves and puts the error in the result. The check makes the function fail under either policy, and a command is only as honest as the promise it awaits.
+
+Apollo Client 4 changed where React lives: the root `@apollo/client` entry point is React-free, and the hooks are under `@apollo/client/react`. An earlier draft of this document said to import `@apollo/client/core` in logic files, which was the version 3 answer. The rule now is that a feature's logic files import from the root entry and never from `@apollo/client/react`.
 
 In a screen:
 
 ```tsx
-const client = useApolloClient();
-const { data } = useQuery(FAVORITES);
-const onAdd = () => addFavorite(client, itemId);
+const { data } = useQuery(TODOS);
+const onAdd = () => addTodo(apolloClient, title);
 ```
 
 Reads in the UI stay with `useQuery`, because that hook subscribes the screen to the cache. Mutations go through the operation function.
 
-## Navigation: a ref, and commands in the app layer
+## Navigation: a ref, and an adapter
 
-Create the ref once and pass it to the container.
+Create the ref once, in `instances.ts`, and pass it to the container.
 
 ```ts
-// apps/mobile/src/navigation/ref.ts
-import { createNavigationContainerRef } from "@react-navigation/native";
-
+// src/app/instances.ts
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 ```
 
@@ -186,157 +173,16 @@ export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 <NavigationContainer ref={navigationRef}>{/* navigators */}</NavigationContainer>
 ```
 
-Navigation commands live in `apps/mobile/src/agent/`, because features must not import React Navigation. The same reason keeps navigation out of operation functions. `addFavorite` returns a result, and the screen decides whether to navigate. If an operation function navigated, a CLI call would change screens in the simulator as a side effect.
+The navigation commands come from `agent-bridge/react-navigation` rather than being written per app. The adapter waits until the target route is focused and fails when it does not arrive: in a dev build, `navigate()` with a route that no navigator handles logs a warning and does not throw, so the wait is the only failure signal there is.
 
-## Commands
-
-A command has a description, a Zod schema for its arguments, and an async `run` function.
+Route names must exist at runtime, which types do not, so the app passes a `z.enum`:
 
 ```ts
-// packages/agent-protocol/src/command.ts
-import type { z } from "zod";
+// src/navigation/routes.ts
+export const RouteName = z.enum(["Home", "Settings"]);
 
-export type Command<Args extends z.ZodTypeAny = z.ZodTypeAny, R = unknown> = {
-	description: string;
-	args: Args;
-	run: (args: z.infer<Args>) => Promise<R>;
-};
-
-export const command = <Args extends z.ZodTypeAny, R>(c: Command<Args, R>) => c;
-
-export type Registry = Record<string, Command>;
-```
-
-Write the description for the agent. Say what the command does, what it returns, and when it does nothing.
-
-### Feature commands
-
-Features export command factories. A factory takes the instances it needs and returns commands.
-
-```ts
-// packages/features/src/favorites/commands.ts
-import { z } from "zod";
-import { command } from "@app/agent-protocol";
-import { addFavorite, removeFavorite, getFavorites } from "./api";
-
-export const favoritesCommands = ({ client }: { client: Client }) => ({
-	getFavorites: command({
-		description:
-			"Returns favorites. source=cache returns what the UI shows now. source=network returns what the server has.",
-		args: z.object({ source: z.enum(["cache", "network"]).default("cache") }),
-		run: ({ source }) => getFavorites(client, source),
-	}),
-
-	addFavorite: command({
-		description: "Adds an item through the API and updates the cache the same way the UI does.",
-		args: z.object({ itemId: z.string().min(1) }),
-		run: async ({ itemId }) => {
-			await addFavorite(client, itemId);
-			return getFavorites(client, "cache");
-		},
-	}),
-
-	removeFavorite: command({
-		description: "Removes an item through the API and evicts it from the cache.",
-		args: z.object({ itemId: z.string().min(1) }),
-		run: async ({ itemId }) => {
-			await removeFavorite(client, itemId);
-			return getFavorites(client, "cache");
-		},
-	}),
-});
-```
-
-```ts
-// packages/features/src/settings/commands.ts
-export const settingsCommands = (store: SettingsStore) => ({
-	getSettings: command({
-		description: "Returns the current settings.",
-		args: z.object({}),
-		run: async () => {
-			const { units, notifications } = store.getState();
-			return { units, notifications };
-		},
-	}),
-
-	setUnits: command({
-		description: "Sets the distance unit and saves it.",
-		args: z.object({ units: z.enum(["km", "mi"]) }),
-		run: async ({ units }) => {
-			await store.getState().setUnits(units);
-			return store.getState().units;
-		},
-	}),
-});
-```
-
-`getSettings` picks fields instead of returning `store.getState()`. The state object includes the action functions, which do not survive `JSON.stringify`.
-
-### Detecting cache bugs with `source`
-
-`getFavorites --source cache` and `getFavorites --source network` should return the same list after a mutation. If they differ, the `update` function in the operation function is wrong. The UI looks correct until the next refetch, so this class of bug is otherwise hard to see.
-
-Read `cache` first and `network` second. A `network-only` query writes its result to the cache, which hides the bug from every later `cache` read.
-
-### Navigation commands
-
-```ts
-// apps/mobile/src/agent/navigation.commands.ts
-import { z } from "zod";
-import { command } from "@app/agent-protocol";
-import type { navigationRef } from "../navigation/ref";
-
-export const RouteName = z.enum(["Home", "ItemDetail", "Favorites", "Settings"]);
-
-async function waitFor(check: () => boolean, timeoutMs: number) {
-	const start = Date.now();
-	while (!check()) {
-		if (Date.now() - start > timeoutMs) throw new Error(`condition not met after ${timeoutMs} ms`);
-		await new Promise((r) => setTimeout(r, 50));
-	}
-}
-
-export const navigationCommands = (ref: typeof navigationRef) => ({
-	currentRoute: command({
-		description: "Returns the focused route and its params.",
-		args: z.object({}),
-		run: async () => {
-			const r = ref.getCurrentRoute();
-			return r ? { name: r.name, params: r.params ?? null } : null;
-		},
-	}),
-
-	navigate: command({
-		description:
-			"Navigates like a user tap. Fails if the target route does not become focused within 2 seconds.",
-		args: z.object({ screen: RouteName, params: z.record(z.unknown()).optional() }),
-		run: async ({ screen, params }) => {
-			if (!ref.isReady()) throw new Error("navigation is not ready");
-			ref.navigate(screen as never, params as never);
-			await waitFor(() => ref.getCurrentRoute()?.name === screen, 2000);
-			return { name: screen, params: ref.getCurrentRoute()?.params ?? null };
-		},
-	}),
-
-	goBack: command({
-		description: "Goes back one screen. Fails if there is no screen to go back to.",
-		args: z.object({}),
-		run: async () => {
-			if (!ref.canGoBack()) throw new Error("cannot go back");
-			ref.goBack();
-			return ref.getCurrentRoute()?.name ?? null;
-		},
-	}),
-});
-```
-
-`waitFor` is necessary. In a dev build, `navigate()` with a route that no navigator handles logs a warning and does not throw. Without the check, the command reports success while the app stays on the old screen.
-
-`RouteName` repeats the keys of `RootStackParamList`, because types do not exist at runtime. A type test keeps them in sync:
-
-```ts
 type Assert<T extends true> = T;
-type _routesMatch = Assert<
+export type RoutesMatchTheNavigator = Assert<
 	[z.infer<typeof RouteName>] extends [keyof RootStackParamList]
 		? [keyof RootStackParamList] extends [z.infer<typeof RouteName>]
 			? true
@@ -345,140 +191,74 @@ type _routesMatch = Assert<
 >;
 ```
 
-For nested navigators, use the nested form `navigate("Tabs", { screen: "Favorites" })` and extend the command with an optional `nested` argument when the first nested route appears.
+The type test fails to compile when the enum and the param list drift apart.
 
-### Debug commands
+Navigation stays out of the features. `addTodo` returns a result, and the screen decides whether to navigate. If an operation function navigated, a CLI call would change screens in the simulator as a side effect.
 
-```ts
-// apps/mobile/src/agent/debug.commands.ts
-export const debugCommands = ({ client }: { client: Client }) => ({
-	"debug.apolloCache": command({
-		description:
-			"Returns normalized cache entries whose key starts with the prefix, for example 'Favorite:'.",
-		args: z.object({ prefix: z.string().min(1) }),
-		run: async ({ prefix }) =>
-			Object.fromEntries(
-				Object.entries(client.cache.extract()).filter(([k]) => k.startsWith(prefix)),
-			),
-	}),
-});
-```
+## Commands
 
-The `prefix` argument is required. A full cache dump of a real app is several megabytes and fills the agent's context with noise.
-
-### The registry
-
-Only `apps/mobile` knows the concrete instances, so the registry lives there.
+A command has a description, a Zod schema for its arguments, and an async `run`. A group gives a set of commands a namespace.
 
 ```ts
-// apps/mobile/src/agent/registry.ts
-import { apolloClient } from "../deps/apollo";
-import { settingsStore } from "../deps/stores";
-import { navigationRef } from "../navigation/ref";
-
-export const commandGroups = {
-	favorites: favoritesCommands({ client: apolloClient }),
-	settings: settingsCommands(settingsStore),
-	navigation: navigationCommands(navigationRef),
-	debug: debugCommands({ client: apolloClient }),
-};
-
-export const commands: Registry = Object.assign({}, ...Object.values(commandGroups));
-```
-
-`Object.assign` overwrites a duplicate name without warning. A test compares the key count of `commands` with the sum of the key counts in `commandGroups` and fails on a mismatch.
-
-## The protocol (`packages/agent-protocol`)
-
-| Request    | Arguments                       | Returns                                                                 |
-| ---------- | ------------------------------- | ----------------------------------------------------------------------- |
-| `commands` | none                            | Every command with its description and the JSON Schema of its arguments |
-| `run`      | `command`, `args`, `timeoutMs?` | `result` and `durationMs`                                               |
-
-Every response is `{ id, ok: true, result }` or `{ id, ok: false, error, issues? }`. `issues` holds the Zod validation errors, so the agent can fix bad arguments without guessing.
-
-```ts
-// packages/agent-protocol/src/handle.ts
+// src/features/todos/commands.ts
+import { command, defineCommands } from "agent-bridge/core";
 import { z } from "zod";
 
-export async function handleRequest(commands: Registry, req: Request): Promise<Response> {
-	if (req.cmd === "commands") {
-		return ok(
-			req.id,
-			Object.entries(commands).map(([name, c]) => ({
-				name,
-				description: c.description,
-				args: z.toJSONSchema(c.args),
-			})),
-		);
-	}
+export const todosCommands = (client: ApolloClient) =>
+	defineCommands("todos", {
+		list: command({
+			description:
+				"Returns the todos. source=cache is what the screen shows right now, source=network is what the server has.",
+			args: z.object({ source: z.enum(["cache", "network"]).default("cache") }),
+			run: ({ source }) => getTodos(client, source),
+		}),
 
-	const cmd = commands[req.args.command];
-	if (!cmd) return fail(req.id, `unknown command ${req.args.command}`);
-
-	const parsed = cmd.args.safeParse(req.args.args ?? {});
-	if (!parsed.success) return fail(req.id, "invalid arguments", parsed.error.issues);
-
-	const started = performance.now();
-	try {
-		const result = await withTimeout(cmd.run(parsed.data), req.args.timeoutMs ?? 10_000);
-		return ok(req.id, { result, durationMs: Math.round(performance.now() - started) });
-	} catch (e) {
-		return fail(req.id, e instanceof Error ? e.message : String(e));
-	}
-}
+		add: command({
+			description: "Adds a todo through the API and updates the cache the way the screen does.",
+			args: z.object({ title: z.string().min(1) }),
+			run: async ({ title }) => {
+				await addTodo(client, title);
+				return getTodos(client, "cache");
+			},
+		}),
+	});
 ```
 
-The handler does not know about Zustand, Apollo, or React Navigation. Rule 3 carries the whole weight of correctness here. The handler can only report what the promise reports.
+Commands are addressed as `<namespace>.<name>`. `buildRegistry` throws on a duplicate key and names it, so two groups cannot quietly shadow each other.
 
-## The plugin (`packages/agent-bridge`)
+Write the description for the agent. Say what the command does, what it returns, and when it does nothing.
 
-The plugin has no web UI. It has an app-side hook and a CLI.
+`settings.get` picks fields instead of returning `store.getState()`. The state object includes the action functions, which do not survive `JSON.stringify` - the handler rejects such a result with `NOT_SERIALIZABLE` and the path of the offending value.
 
-```
-packages/agent-bridge/
-	src/
-		index.ts             exports useAgentBridge, a no-op in production
-		useAgentBridge.ts    listens for requests and calls handleRequest
-	cli/
-		index.ts             entry point for the agent-bridge binary
-		client.ts            WebSocket client with request IDs and timeouts
-		wire/                MessageFramePacker and handshake, copied from your expo version
-	package.json           "bin": { "agent-bridge": "./dist/cli/index.js" }
-```
+### Detecting cache bugs with `source`
 
-### App side
+`todos.list --source cache` and `todos.list --source network` should return the same list after a mutation. If they differ, the `update` function in the operation function is wrong. The UI looks correct until the next refetch, so this class of bug is otherwise hard to see.
+
+Read `cache` first and `network` second. A `network-only` query writes its result to the cache, which hides the bug from every later `cache` read.
+
+## Registration
+
+One file builds the groups:
 
 ```ts
-// packages/agent-bridge/src/index.ts
-export let useAgentBridge: (commands: Registry) => void = () => {};
-if (process.env.NODE_ENV !== "production") {
-	useAgentBridge = require("./useAgentBridge").useAgentBridge;
-}
+// src/app/agent.ts
+export const agentGroups = [
+	todosCommands(apolloClient),
+	settingsCommands(settingsStore),
+	apolloCommands(apolloClient),
+	navigationCommands(navigationRef, { routes: RouteName }),
+];
 ```
 
-```ts
-// packages/agent-bridge/src/useAgentBridge.ts
-import { useEffect } from "react";
-import { useDevToolsPluginClient } from "expo/devtools";
-import { handleRequest } from "@app/agent-protocol";
+Two of those groups come from the app's features and two from the package's adapters: `apolloCommands` adds `apollo.cache` and `apollo.refetch` for looking into the cache directly, which is worth having when `--source cache` and `--source network` disagree and you need to see why.
 
-export function useAgentBridge(commands: Registry) {
-	const client = useDevToolsPluginClient("agent-bridge");
-	useEffect(() => {
-		if (!client) return;
-		const sub = client.addMessageListener("request", async (req) => {
-			client.sendMessage("response", await handleRequest(commands, req));
-		});
-		return () => sub.remove();
-	}, [client, commands]);
-}
-```
+`App.tsx` loads that file behind `__DEV__` and hands the result to the hook:
 
 ```tsx
-// apps/mobile/App.tsx
+const agentGroups: CommandGroup[] = __DEV__ ? require("./agent").agentGroups : [];
+
 export default function App() {
-	useAgentBridge(commands);
+	useAgentBridge(agentGroups);
 	return (
 		<ApolloProvider client={apolloClient}>
 			<NavigationContainer ref={navigationRef}>
@@ -489,79 +269,66 @@ export default function App() {
 }
 ```
 
-### CLI side
+Both halves of that guard are needed. `agent-bridge` already exports a no-op in production, which drops the hook and the handler; without the `__DEV__` require, a plain import would still pull every command and every description into a release bundle. A release export of this app was checked and contained neither.
 
-The CLI connects to `ws://localhost:8081/expo-dev-plugins/broadcast`. It performs the handshake as the browser side of the `agent-bridge` plugin and packs messages with Expo's frame format. Copy `MessageFramePacker` and the handshake logic from the `expo` package in your `node_modules` into `cli/wire/`. Do not write them from memory. This protocol is internal to Expo and has changed before.
+The array lives at module scope. Built inside the component, it would be a new array on every render, rebuilding the registry and reconnecting the bridge each time; the hook warns once in development when it sees that.
 
-The CLI does not hard-code any command. On each call it asks the app for the `commands` list and builds flags from the JSON Schema. A new command is available to the agent after a Metro reload, with no CLI rebuild.
+## The protocol, in one paragraph
 
-```
-$ agent-bridge commands
-$ agent-bridge getFavorites --source network
-$ agent-bridge addFavorite --itemId 42
-$ agent-bridge navigate --screen Favorites
-$ agent-bridge debug.apolloCache --prefix Favorite:
-```
+The CLI asks the app for `commands` and gets every command with its description and the JSON Schema of its arguments; it then sends `run` with the command name and arguments. A response is `{ ok: true, result, durationMs }` or `{ ok: false, error, code, issues? }`, where `code` is one of `UNKNOWN_COMMAND`, `INVALID_ARGS`, `COMMAND_FAILED`, `TIMEOUT`, `NOT_SERIALIZABLE`, or `PROTOCOL_MISMATCH`. `issues` holds the Zod errors, so the agent can fix a bad call without guessing. Exit code 0 means the command ran, 1 means it failed or the call was wrong, and 2 means the app could not be reached. `docs/package-architecture.md` has the details.
 
-Output rules:
+## What keeps this honest
 
-- stdout holds one JSON document per call. Nothing else.
-- stderr holds human-readable diagnostics.
-- Exit code 0 means success. Exit code 1 means the command failed or was rejected. Exit code 2 means the CLI could not reach the app.
+Conventions decay. These are the checks that hold the rules up, and each one exists because it caught something.
 
-On the Android emulator, run `adb reverse tcp:8081 tcp:8081` before the first call. The iOS simulator reaches `localhost` without extra setup.
+| Check                                                                                                          | What it protects                                                              |
+| -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| dependency-cruiser: `src/core` imports no UI library; each adapter imports only its own                        | Keeps the core usable in the app, the CLI, and tests                          |
+| dependency-cruiser: no unresolvable imports                                                                    | The layer rules match resolved paths, so a typo'd import would slip past them |
+| ESLint: `src/features/*/{api,store,commands}.ts` may not import React, React Native, Expo, or React Navigation | Rule 2: logic a command calls must run outside React                          |
+| ESLint: no `Date.now` or `Math.random` in those same files                                                     | A command and a test must see the same values                                 |
+| `@typescript-eslint/no-floating-promises`, workspace-wide                                                      | Rule 3                                                                        |
+| A type test on `RouteName` against `RootStackParamList`                                                        | The runtime enum and the navigator cannot drift                               |
+| `test/production-bundle.test.ts`                                                                               | The package entry point stays a no-op in production                           |
+| `pnpm --filter mobile check:release-bundle`                                                                    | The app ships neither the bridge nor its command descriptions                 |
+| `buildRegistry` throwing on a duplicate key, exercised in tests                                                | Two groups cannot shadow each other                                           |
 
-## How the agent uses it
-
-Add this section to `CLAUDE.md`:
-
-```md
-## Verifying behavior in the simulator
-
-The running app exposes its business logic through `pnpm agent-bridge`.
-
-1. Start Metro and the simulator first. Exit code 2 means the app is not connected.
-2. Run `pnpm agent-bridge commands` to see every command and its arguments.
-3. After a code change, reload the app (press `r` in Metro) before you run commands.
-4. After a mutation that touches server data, compare `getX --source cache` with `getX --source network`, in that order. A difference means the cache update is wrong.
-5. Use `navigate` to put the app on a screen for a UI check. Do not use screenshots to verify data. Use the data commands.
-6. When you add a feature with business logic, add a command for it in the feature's `commands.ts`.
-7. Every store action and operation function you write must return a promise that resolves when the work is done. Never fire and forget.
-```
-
-Step 6 keeps the approach alive. If features ship without commands, the agent loses access one feature at a time, and nobody notices until it cannot verify anything.
+Two notes on the lint rule. It matches three file names, so a `helpers.ts` in a feature folder slips through: put logic a command needs in one of the three, or widen the pattern. And when you change a dependency-cruiser rule, plant a violation and watch it fail before trusting a green run - the rules match resolved paths under `node_modules`, and an earlier version of them silently matched nothing.
 
 ## Tests use the same functions
 
-Commands are testable in Jest without a simulator, because `handleRequest` takes only a registry.
+Commands are testable without a simulator, because `handleRequest` takes only a registry.
 
-- Build Zustand stores with in-memory dependencies and a fixed clock.
-- Build an `ApolloClient` with `SchemaLink` and a mock schema, or with `MockLink`. The operation functions need no `MockedProvider`, because they have no React imports.
+- Build Zustand stores with in-memory storage and a fixed clock.
+- Build an `ApolloClient` against the app's stand-in schema, or with `MockLink`. The operation functions need no `MockedProvider`, because they have no React imports.
 - Build a registry from these instances and call `handleRequest` directly.
 
-A test that runs `addFavorite` and then compares `getFavorites` from cache and from the mock server catches a broken `update` function before the agent does.
-
-## Rules to enforce in CI
-
-1. dependency-cruiser fails the build if `packages/features` imports `react`, `react-native`, `expo-*`, `@react-navigation/*`, or `@apollo/client` outside `@apollo/client/core`.
-2. `@typescript-eslint/no-floating-promises` is an error in `packages/features`.
-3. ESLint fails on `set(` outside store files and on `Date.now` or `Math.random` in `packages/features`.
-4. A test checks that command names are unique across `commandGroups`.
-5. A type test checks that `RouteName` matches `RootStackParamList`.
-6. A test runs every command against test instances and checks that each result survives `JSON.stringify`.
-7. After a release export, CI searches the bundle for the string `agent-bridge` and fails if it finds it.
-8. After every Expo SDK upgrade, a smoke test runs `agent-bridge commands` against a simulator.
+`apps/mobile/test/commands.test.ts` does exactly this: it adds a todo and then compares `todos.list` from cache and from the server, which catches a broken `update` before the agent does, and it asserts that a failing save rolls the store back and fails the command.
 
 ## Decisions and trade-offs
 
-**Zustand plus operation functions instead of a TCA-style reducer architecture.** The CLI needs one store the UI subscribes to, awaitable mutations, injected dependencies, and serializable results. Zustand, Apollo, and plain async functions provide all four with about a third of the code of a custom reducer runtime. The cost is weaker guarantees. Nothing forces a change through a named action, tests assert only what you write down, and you handle cancellation with `AbortController` yourself. For a feature with real flow logic, such as a multi-step process with cancellation and races, use XState for that feature alone.
+**Zustand plus operation functions instead of a TCA-style reducer architecture.** The CLI needs one store the UI subscribes to, awaitable mutations, injected dependencies, and serializable results. Zustand, Apollo, and plain async functions provide all four with about a third of the code of a custom reducer runtime. The cost is weaker guarantees. Nothing forces a change through a named action, tests assert only what you write down, and you handle cancellation with `AbortController` yourself. For a feature with real flow logic, such as a multi-step process with cancellation and races, use XState for that feature alone - and make its commands wait for the resulting state rather than returning as soon as the event is sent.
 
 **Mutations go through operation functions, not `useMutation`.** `useMutation` ties the cache-update logic to a component, where the command cannot reach it. The cost is that screens handle loading and error state for mutations themselves, with local state or a small `useOperation` hook. Reads stay with `useQuery`.
 
+**Features live in the app, not in their own package.** The example app is meant to show commands, not architecture. One app, no provider, and screens that import their instances directly. The cost is that a screen test cannot be handed a different store - you mock `../app/instances` instead - and that the logic boundary is a lint rule on file names rather than a package boundary. Both are acceptable here and both are the first things to change if this grows.
+
 **Navigation stays out of business logic.** Operation functions and store actions return results. Screens decide where to navigate. This keeps features free of React Navigation and keeps CLI calls from changing screens as a side effect.
 
-**Navigation commands do not verify business logic.** They put the app on a specific screen so Maestro or agent-device can check the rendering. The data commands verify the logic.
+**Navigation commands do not verify business logic.** They put the app on a specific screen so a UI check has something to look at. The data commands verify the logic.
 
-**Screen readiness is not solved yet.** `navigate` waits until the route is focused, not until the screen's queries have loaded. If agents start to fail on this, add a dev-only `useAgentReady("Favorites", !loading)` hook that `navigate` waits on. Do not build it before an agent actually fails on it.
+**The inspection adapters are read-only.** `agent-bridge/zustand` exposes `store.get` and nothing that writes. A command that called `setState` would put the app in a state no tap can produce, and the agent would verify something users never see. To change state, expose the store action as a command in the feature.
 
-**The bridge is a remote control for the app.** It accepts any valid command from anything that can reach Metro. Keep it out of release builds with the CI check above. Keep Metro bound to localhost on shared networks. Do not point a dev build with the bridge at production backend data.
+**Screen readiness is not solved yet.** `nav.navigate` waits until the route is focused, not until the screen's queries have loaded. If agents start to fail on this, add a dev-only `useAgentReady("Todos", !loading)` hook that `navigate` waits on. Do not build it before an agent actually fails on it.
+
+## Limits
+
+**One browser-side client at a time.** The app keeps a single client per plugin and terminates the previous one when another connects, so the CLI and the web console cannot both be attached. This is Expo's behavior, not something this design chose; the CLI reports it and exits 2 rather than working around it.
+
+**Every connected app answers.** Metro's endpoint forwards a request to every connected client, including a second device. With a simulator and an emulator on the same Metro, a command runs on both and the CLI takes the first answer. Keep one device connected while an agent works.
+
+**The bridge is a remote control for the app.** It accepts any valid command from anything that can reach Metro. Keep it out of release builds with the checks above. Keep Metro bound to localhost on shared networks. Do not point a dev build with the bridge at production backend data.
+
+## How the agent uses it
+
+`CLAUDE.md` carries the short version, and `skills/driving-the-app` the long one: start Metro and the simulator, ask the app for `commands`, reload after a code change, compare cache and network after a mutation, use `nav.navigate` to set up a screen but never screenshots to verify data, and add a command for every feature with business logic. If features ship without commands, the agent loses its reach one feature at a time.

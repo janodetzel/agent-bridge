@@ -6,9 +6,9 @@ and `docs/package-architecture.md` are the source of truth for the design; read 
 before changing a layer boundary or the protocol.
 
 The example app keeps logic and UI together in `src/features/<feature>/`, and
-`src/app/instances.ts` is the only file that creates instances. The architecture
-docs describe a larger split - a provider, and features in their own package - which
-is the next step if this grows into a product, not the shape it has now.
+`src/app/instances.ts` is the only file that creates instances. The architecture doc
+names the larger split - a provider, and features in their own package - as the next
+step if this grows into a product, not the shape it has now.
 
 ## Skills
 

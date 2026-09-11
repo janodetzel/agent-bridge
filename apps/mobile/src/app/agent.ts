@@ -9,6 +9,6 @@ import { apolloCommands } from "agent-bridge/apollo";
 export const agentGroups = [
 	todosCommands(apolloClient),
 	settingsCommands(settingsStore),
-  apolloCommands(apolloClient),
+	apolloCommands(apolloClient),
 	navigationCommands(navigationRef as NavigationRef, { routes: RouteName }),
 ];
