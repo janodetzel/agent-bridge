@@ -23,7 +23,7 @@ export const todosSpec = {
 	},
 
 	addMany: {
-		args: z.object({ todos: z.array(z.object({ title: z.string().min(1) })) }),
+		args: z.object({ todos: z.array(z.string().min(1)) }),
 		description:
 			"Adds many todos through the API, updates the cache the way the screen does, and returns the todos from the cache.",
 	},
@@ -42,7 +42,6 @@ export const todosSpec = {
 
 	removeAll: {
 		args: z.object({}),
-		description:
-			"Removes all todos and clears the cache.",
+		description: "Removes all todos and clears the cache.",
 	},
 } satisfies Spec;

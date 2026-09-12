@@ -1,5 +1,14 @@
 import type { ApolloClient, Reference } from "@apollo/client";
-import { type Todo, ADD_TODO, ADD_TODOS, REMOVE_TODO, REMOVE_ALL_TODOS, SET_TODO_DONE, TODO_FIELDS, TODOS } from "./gql";
+import {
+	type Todo,
+	ADD_TODO,
+	ADD_TODOS,
+	REMOVE_TODO,
+	REMOVE_ALL_TODOS,
+	SET_TODO_DONE,
+	TODO_FIELDS,
+	TODOS,
+} from "./gql";
 
 /**
  * One operation function per mutation, each owning its cache update. The screen
@@ -47,13 +56,10 @@ export async function setTodoDone(client: ApolloClient, id: string, done: boolea
 	return (data as { setTodoDone: Todo }).setTodoDone;
 }
 
-export async function addManyTodos(
-	client: ApolloClient,
-	titles: Array<{ title: string }>,
-): Promise<Todo[]> {
+export async function addManyTodos(client: ApolloClient, titles: Array<string>): Promise<Todo[]> {
 	const { data, error } = await client.mutate({
 		mutation: ADD_TODOS,
-		variables: { titles: titles.map((t) => t.title) },
+		variables: { titles },
 		update(cache, { data }) {
 			const added = (data as { addTodos?: Todo[] } | null)?.addTodos ?? [];
 			if (!added.length) return;
