@@ -39,7 +39,7 @@ A single fire-and-forget call makes a command report success before the save run
 
 **Commands use the same instances as the UI.** One file creates the Apollo client, the stores, and the navigation ref. Both the UI and the agent registry read from it. If a command constructs its own client, it verifies a path no user takes.
 
-**Commands call the same functions as the UI.** A command is never a second implementation. The feature method *is* the command.
+**Commands call the same functions as the UI.** A command is never a second implementation. The feature method _is_ the command.
 
 ## Layering
 
@@ -109,7 +109,9 @@ const toRegistry = (features: AgentFeature[]): Registry =>
 				jsonSchema: z.toJSONSchema(c.schema),
 				parse: (input: unknown) => {
 					const r = c.schema.safeParse(input);
-					return r.success ? { ok: true as const, value: r.data } : { ok: false as const, issues: r.error.issues };
+					return r.success
+						? { ok: true as const, value: r.data }
+						: { ok: false as const, issues: r.error.issues };
 				},
 				run: c.run,
 			},
@@ -174,7 +176,8 @@ Usage:
 export const favoritesSpec = {
 	add: {
 		args: z.object({ itemId: z.string().min(1) }),
-		description: "Adds an item through the API and updates the cache like the UI does. No-op if already a favorite.",
+		description:
+			"Adds an item through the API and updates the cache like the UI does. No-op if already a favorite.",
 	},
 	remove: {
 		args: z.object({ itemId: z.string().min(1) }),
@@ -182,7 +185,8 @@ export const favoritesSpec = {
 	},
 	refresh: {
 		args: z.object({ source: z.enum(["cache", "network"]).default("cache") }),
-		description: "Reloads favorites. cache returns what the UI shows now, network returns what the server has.",
+		description:
+			"Reloads favorites. cache returns what the UI shows now, network returns what the server has.",
 	},
 } as const satisfies Spec;
 ```
@@ -218,7 +222,7 @@ Commands are collected from the features themselves. There is no separate group 
 ```ts
 // app-kit
 export type CollectedCommand = {
-	name: string;            // "<namespace>.<key>"
+	name: string; // "<namespace>.<key>"
 	description: string;
 	schema: z.ZodTypeAny;
 	run: (args: unknown) => Promise<unknown>;
@@ -235,7 +239,12 @@ export function collectCommands(features: AgentFeature[]): CollectedCommand[] {
 			const handler = (feature as Record<string, unknown>)[key];
 			if (typeof handler !== "function") throw new Error(`missing handler for ${name}`);
 			seen.add(name);
-			out.push({ name, description, schema: args, run: (a) => (handler as (x: unknown) => Promise<unknown>)(a) });
+			out.push({
+				name,
+				description,
+				schema: args,
+				run: (a) => (handler as (x: unknown) => Promise<unknown>)(a),
+			});
 		}
 	}
 	return out;

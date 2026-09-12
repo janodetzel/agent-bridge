@@ -1,0 +1,127 @@
+{
+	"name": "@janodetzel/app-commands",
+	"version": "0.1.0",
+	"description": "Run typed commands against a running app from a CLI, an MCP server, or the Metro dev tools. Knows no UI framework.",
+	"author": "Jano Detzel <jano@janodetzel.com>",
+	"homepage": "https://github.com/janodetzel/agent-bridge#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/janodetzel/agent-bridge.git",
+		"directory": "packages/app-commands"
+	},
+	"bugs": {
+		"url": "https://github.com/janodetzel/agent-bridge/issues"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"main": "build/index.js",
+	"types": "build/index.d.ts",
+	"sideEffects": false,
+	"scripts": {
+		"build": "EXPO_NONINTERACTIVE=1 expo-module build && EXPO_NONINTERACTIVE=1 expo-module build cli && pnpm run build:mcp",
+		"build:all": "expo-module prepare && pnpm run build:mcp && pnpm run web:export",
+		"build:mcp": "tsc -p mcp/tsconfig.json",
+		"clean": "expo-module clean",
+		"prepare": "expo-module prepare && pnpm run build:mcp",
+		"prepublishOnly": "expo-module prepare && expo-module prepublishOnly && pnpm run build:mcp && pnpm run web:export",
+		"web:dev": "cd webui && npx expo start -w",
+		"web:export": "./scripts/build-webui.js",
+		"typecheck": "tsc --noEmit"
+	},
+	"keywords": [
+		"expo",
+		"devtools"
+	],
+	"files": [
+		"build",
+		"dist",
+		"expo-module.config.json"
+	],
+	"license": "MIT",
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.30.0",
+		"ws": "^8.21.3"
+	},
+	"devDependencies": {
+		"@apollo/client": "^4.3.0",
+		"@janodetzel/feature-kit": "workspace:*",
+		"@react-navigation/native": "^7.3.18",
+		"@types/react": "~19.2.2",
+		"@types/ws": "^8.18.1",
+		"expo": "~57.0.22",
+		"expo-module-scripts": "^4.1.7",
+		"graphql": "^17.0.2",
+		"react": "19.2.3",
+		"react-native": "0.86.3",
+		"typescript": "~5.9.3",
+		"zod": "^4.6.2",
+		"zustand": "^5.0.15"
+	},
+	"peerDependencies": {
+		"expo": ">=53.0.0",
+		"react": "*",
+		"zod": "^4.0.0",
+		"@janodetzel/feature-kit": "*"
+	},
+	"exports": {
+		".": {
+			"types": "./build/index.d.ts",
+			"default": "./build/index.js"
+		},
+		"./expo": {
+			"types": "./build/expo/index.d.ts",
+			"default": "./build/expo/index.js"
+		},
+		"./protocol": {
+			"types": "./build/core/protocol.d.ts",
+			"default": "./build/core/protocol.js"
+		},
+		"./conformance": {
+			"types": "./build/conformance.d.ts",
+			"default": "./build/conformance.js"
+		},
+		"./adapters/apollo": {
+			"types": "./build/adapters/apollo.d.ts",
+			"default": "./build/adapters/apollo.js"
+		},
+		"./adapters/feature-kit": {
+			"types": "./build/adapters/feature-kit.d.ts",
+			"default": "./build/adapters/feature-kit.js"
+		},
+		"./adapters/react-navigation": {
+			"types": "./build/adapters/react-navigation.d.ts",
+			"default": "./build/adapters/react-navigation.js"
+		},
+		"./adapters/zod": {
+			"types": "./build/adapters/zod.d.ts",
+			"default": "./build/adapters/zod.js"
+		},
+		"./adapters/zustand": {
+			"types": "./build/adapters/zustand.d.ts",
+			"default": "./build/adapters/zustand.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"peerDependenciesMeta": {
+		"@apollo/client": {
+			"optional": true
+		},
+		"@react-navigation/native": {
+			"optional": true
+		},
+		"zustand": {
+			"optional": true
+		},
+		"zod": {
+			"optional": true
+		},
+		"@janodetzel/feature-kit": {
+			"optional": true
+		}
+	},
+	"bin": {
+		"appcmd": "./build/cli/index.js",
+		"appcmd-mcp": "./build/mcp/index.js"
+	}
+}

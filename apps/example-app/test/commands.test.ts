@@ -1,6 +1,11 @@
 import { ApolloClient, InMemoryCache } from "@apollo/client";
-import { buildRegistry, handleRequest, PROTOCOL_VERSION, type Registry } from "agent-bridge/core";
-import { featureCommands } from "agent-bridge/feature-kit";
+import {
+	buildRegistry,
+	handleRequest,
+	PROTOCOL_VERSION,
+	type Registry,
+} from "@janodetzel/app-commands";
+import { featureCommands } from "@janodetzel/app-commands/adapters/feature-kit";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { apiLink } from "../src/app/api";

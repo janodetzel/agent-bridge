@@ -11,7 +11,7 @@ import { join } from "node:path";
 //
 // Plenty of the bridge does reach the bundle - the argument schemas, the
 // descriptions, and `handleRequest` itself, which the app pulls in when it imports
-// `buildRegistry` from agent-bridge/core. All of it is unreachable: no caller, no
+// `buildRegistry` from @janodetzel/app-commands. All of it is unreachable: no caller, no
 // socket. That is bundle size, not exposure, and checking for it would only teach
 // people to ignore a failing check.
 const FORBIDDEN = ["useDevToolsPluginClient"];

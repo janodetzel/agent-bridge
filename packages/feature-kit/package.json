@@ -1,5 +1,5 @@
 {
-	"name": "feature-kit",
+	"name": "@janodetzel/feature-kit",
 	"version": "0.1.0",
 	"description": "A small architecture pattern: features declare their entry points once, as named async methods with schema-validated arguments, and a lint plugin keeps the rules that make them reachable from outside React.",
 	"main": "build/index.js",
@@ -13,7 +13,8 @@
 	},
 	"files": [
 		"build",
-		"eslint"
+		"eslint",
+		"depcruise"
 	],
 	"license": "MIT",
 	"devDependencies": {
@@ -33,6 +34,9 @@
 		"./eslint": {
 			"types": "./eslint/index.d.mts",
 			"default": "./eslint/index.mjs"
+		},
+		"./depcruise": {
+			"default": "./depcruise/index.cjs"
 		},
 		"./package.json": "./package.json"
 	}

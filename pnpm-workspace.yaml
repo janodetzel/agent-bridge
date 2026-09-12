@@ -1,4 +1,4 @@
 packages:
   - "packages/*"
   - "apps/*"
-  - "packages/agent-bridge/webui"
+  - "packages/app-commands/webui"

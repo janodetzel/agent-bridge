@@ -1,6 +1,6 @@
 import { ApolloProvider } from "@apollo/client/react";
 import { NavigationContainer } from "@react-navigation/native";
-import { useAgentBridge } from "agent-bridge";
+import { useAppCommands } from "@janodetzel/app-commands/expo";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 
@@ -9,7 +9,7 @@ import { commandRegistry } from "./commands";
 import { apolloClient, dismissedNewsStore, navigationRef, settingsStore } from "./instances";
 
 export default function App() {
-	useAgentBridge(commandRegistry);
+	useAppCommands(commandRegistry);
 
 	useEffect(() => {
 		void settingsStore.getState().load();

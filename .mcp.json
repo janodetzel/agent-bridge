@@ -1,7 +1,7 @@
 {
 	"mcpServers": {
-		"agent-bridge": {
-			"command": "node_modules/.bin/agent-bridge-mcp",
+		"app-commands": {
+			"command": "node_modules/.bin/appcmd-mcp",
 			"args": []
 		}
 	}

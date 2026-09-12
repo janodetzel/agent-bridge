@@ -1,10 +1,22 @@
-# feature-kit
+# @janodetzel/feature-kit
 
 A small architecture pattern for an app whose business logic something other than
 a person has to be able to call — an agent, a test, a script.
 
-It is one function and five lint rules. It knows nothing about agent-bridge; the
-bridge adapts it, the same way it adapts Apollo.
+It is one function, five lint rules, and a dependency-cruiser rule. It knows
+nothing about `@janodetzel/app-commands` at runtime; that package adapts it, the
+same way it adapts Apollo.
+
+This package is one layer: how a feature declares its entry points, and the
+checks that keep them reachable. For _why_ those constraints exist, see
+[`docs/principles.md`](../../docs/principles.md) — it is the source of truth and
+this README does not restate it.
+
+| Entry point                         | What it is                                                     |
+| ----------------------------------- | -------------------------------------------------------------- |
+| `@janodetzel/feature-kit`           | `defineFeature`, `META`, and the `Spec`/`Feature` types        |
+| `@janodetzel/feature-kit/eslint`    | The five rules, as a flat-config plugin                        |
+| `@janodetzel/feature-kit/depcruise` | `rules()`, the sibling-feature boundary for dependency-cruiser |
 
 ## The pattern
 
@@ -120,13 +132,13 @@ If a feature genuinely needs exhaustive state-transition guarantees, such as a
 multi-step flow with branching and cancellation, use XState for that feature alone
 and expose its `send` through a handler.
 
-## Using it with agent-bridge
+## Using it with @janodetzel/app-commands
 
-`agent-bridge/feature-kit` reads a feature's spec and emits one command per entry:
+`@janodetzel/app-commands/adapters/feature-kit` reads a feature's spec and emits one command per entry:
 
 ```ts
 export const commandRegistry = buildRegistry(featureCommands(favorites, settings));
 ```
 
-That dependency runs one way only. feature-kit never imports agent-bridge, which
+That dependency runs one way only. feature-kit never imports @janodetzel/app-commands, which
 is what lets either side be replaced.

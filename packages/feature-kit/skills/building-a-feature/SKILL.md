@@ -175,4 +175,4 @@ rolls the store back and fails the command; an invalid argument is rejected.
 - [ ] Reads of server data take `source`
 - [ ] The feature is in `src/app/commands.ts`
 - [ ] `pnpm typecheck && pnpm lint && pnpm test && pnpm depcruise`
-- [ ] Verified in the simulator with `pnpm agent-bridge`
+- [ ] Verified in the simulator with `pnpm cmd`

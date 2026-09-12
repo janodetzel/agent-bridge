@@ -1,0 +1,107 @@
+import { describe, expect, it } from "vitest";
+
+import { checkRegistry } from "../src/conformance";
+import type { Command, Registry } from "../src/core/command";
+
+/**
+ * The suite an app runs against its own registry, tested the only way it can be:
+ * by handing it registries that are wrong on purpose.
+ *
+ * Each case asserts the problem is found *and* that a conforming registry stays
+ * silent, because a checker that reports everything is as useless as one that
+ * reports nothing.
+ */
+
+const ok = (over: Partial<Command> = {}): Command => ({
+	description: "Returns the arguments it was given, and never writes anything.",
+	jsonSchema: { type: "object", properties: { value: { type: "string" } } },
+	parse: (input) =>
+		typeof input === "object" && input !== null
+			? { ok: true, value: input }
+			: { ok: false, issues: [{ message: "expected an object" }] },
+	run: async (args) => args,
+	...over,
+});
+
+const problems = (registry: Registry, samples?: Record<string, unknown>) =>
+	checkRegistry(registry, samples ? { samples } : {});
+
+describe("checkRegistry", () => {
+	it("stays silent on a conforming registry", async () => {
+		expect(await problems({ "todos.add": ok() })).toEqual([]);
+	});
+
+	it("catches a missing description", async () => {
+		const found = await problems({ "todos.add": ok({ description: "  " }) });
+		expect(found).toHaveLength(1);
+		expect(found[0]!.problem).toContain("no description");
+	});
+
+	it("catches a description no longer than the command name", async () => {
+		const found = await problems({ "todos.add": ok({ description: "Add todo" }) });
+		expect(found[0]!.problem).toContain("generated from the name");
+	});
+
+	it("catches a schema that is not an argument object", async () => {
+		const found = await problems({ "todos.add": ok({ jsonSchema: { type: "string" } }) });
+		expect(found[0]!.problem).toContain("rather than an object");
+	});
+
+	it("catches a parse that accepts anything", async () => {
+		const found = await problems({
+			"todos.add": ok({ parse: (value) => ({ ok: true, value }) }),
+		});
+		expect(found[0]!.problem).toContain("accepts a deliberately wrong input");
+	});
+
+	it("catches a rejection that explains nothing", async () => {
+		const found = await problems({
+			"todos.add": ok({ parse: () => ({ ok: false, issues: [] }) }),
+		});
+		expect(found[0]!.problem).toContain("reports no issues");
+	});
+
+	it("catches a namespace no feature could have declared", async () => {
+		// `defineFeature` enforces /^[a-z][a-zA-Z0-9]*$/. A registry slice built by
+		// hand has no such guard, so the two paths could otherwise disagree about
+		// what a namespace is.
+		const found = await problems({ "example-command.inout": ok() });
+		expect(found).toHaveLength(1);
+		expect(found[0]!.problem).toContain("<namespace>.<name>");
+	});
+
+	it("catches a result the wire cannot carry", async () => {
+		const found = await problems(
+			{ "todos.list": ok({ run: async () => ({ when: new Map() }) }) },
+			{ "todos.list": {} },
+		);
+		expect(found[0]!.problem).toContain("JSON cannot carry");
+	});
+
+	it("catches a command that fails on its own sample", async () => {
+		const found = await problems(
+			{
+				"todos.list": ok({
+					run: async () => {
+						throw new Error("no network");
+					},
+				}),
+			},
+			{ "todos.list": {} },
+		);
+		expect(found[0]!.problem).toContain("failed on its conformance sample: no network");
+	});
+
+	it("catches a sample naming a command that does not exist", async () => {
+		const found = await problems({ "todos.add": ok() }, { "todos.remove": {} });
+		expect(found[0]!.problem).toContain("not in the registry");
+	});
+
+	it("passes a result that round-trips, including a Date", async () => {
+		const found = await problems(
+			{ "todos.list": ok({ run: async () => ({ at: new Date(0), items: [1, 2] }) }) },
+			{ "todos.list": {} },
+		);
+		expect(found).toEqual([]);
+	});
+});

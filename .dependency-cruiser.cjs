@@ -1,20 +1,24 @@
 /**
- * Keeps the two packages apart, and keeps agent-bridge's core free of everything.
+ * Keeps the two packages apart, and keeps app-commands' core free of everything.
  *
- * - `agent-bridge/src/core` imports nothing. Not zod, not a UI library, not the
- *   feature layer. That is what lets the bridge run against an app built on
- *   Redux, XState, MobX, or plain service classes.
- * - `agent-bridge/src/adapters/<lib>` may use only its own library and core.
- * - `feature-kit` never imports agent-bridge. The bridge adapts it, like Apollo.
+ * - `app-commands/src/core` imports nothing. Not zod, not a UI library, not the
+ *   feature layer. That is what lets it run against an app built on Redux,
+ *   XState, MobX, or plain service classes. That is principle 10.
+ * - `app-commands/src/adapters/<lib>` may use only its own library and core.
+ * - `feature-kit` imports app-commands types only. The dependency runs the other
+ *   way at runtime: an adapter binds the two.
  *
- * The example app's own boundaries - no React in logic files, no imports between
- * sibling features - are feature-kit's ESLint rules instead, because they are
- * about file names and resolved paths rather than package edges.
+ * The example app's own boundaries are mostly feature-kit's ESLint rules, because
+ * they are about file names rather than package edges. The one exception is the
+ * sibling-feature rule, which feature-kit ships for dependency-cruiser as well:
+ * a deep relative import between features is a package edge, and belongs here.
  */
 // Rules match the resolved path of a dependency, which for an npm package is the
 // file inside node_modules. Matching on the path rather than on dependency-cruiser's
 // dependency types is deliberate: an import of a package the importer does not
 // declare has no type to match, and that is exactly the import worth catching.
+const featureKit = require("@janodetzel/feature-kit/depcruise");
+
 const inNodeModules = (...packages) => packages.map((p) => `(^|/)node_modules/${p}/`);
 
 // The adapter layer's shared schema language. Core has no validation library, so
@@ -26,7 +30,7 @@ const ADAPTER_LIBRARIES = {
 	"react-navigation": inNodeModules("@react-navigation/[^/]+"),
 	apollo: inNodeModules("@apollo/client"),
 	zustand: inNodeModules("zustand"),
-	"feature-kit": inNodeModules("feature-kit"),
+	"feature-kit": inNodeModules("@janodetzel/feature-kit"),
 	zod: [],
 };
 
@@ -36,34 +40,38 @@ const adapterRules = Object.entries(ADAPTER_LIBRARIES).map(([adapter, allowed]) 
 	comment:
 		"An adapter binds one library to core. Importing another adapter's library would make every app that uses this one pay for it.",
 	severity: "error",
-	from: { path: `^packages/agent-bridge/src/adapters/${adapter}` },
+	from: { path: `^packages/app-commands/src/adapters/${adapter}` },
 	to: { path: "(^|/)node_modules/", pathNot: [...SHARED, ...allowed] },
 }));
 
 module.exports = {
 	forbidden: [
+		...featureKit.rules(),
 		{
 			name: "core-imports-nothing",
 			comment:
-				"packages/agent-bridge/src/core must not import anything from node_modules - no validation library, no UI library, no feature layer. It knows four things per command and nothing about where they came from, and that is the property that makes the bridge reusable. Put the dependency in an adapter.",
+				"packages/app-commands/src/core must not import anything from node_modules - no validation library, no UI library, no feature layer. It knows four things per command and nothing about where they came from, and that is the property that makes it reusable (principle 10). Put the dependency in an adapter.",
 			severity: "error",
-			from: { path: "^packages/agent-bridge/src/core" },
+			from: { path: "^packages/app-commands/src/core" },
 			to: { path: "(^|/)node_modules/" },
 		},
 		{
-			name: "core-does-not-import-app-or-adapters",
+			name: "core-does-not-import-transport-or-adapters",
 			severity: "error",
-			from: { path: "^packages/agent-bridge/src/core" },
-			to: { path: "^packages/agent-bridge/src/(app|adapters)" },
+			from: { path: "^packages/app-commands/src/core" },
+			to: { path: "^packages/app-commands/src/(expo|adapters)" },
 		},
 		...adapterRules,
 		{
-			name: "feature-kit-does-not-import-agent-bridge",
+			name: "feature-kit-imports-app-commands-types-only",
 			comment:
-				"feature-kit is an architecture pattern, not part of the bridge. The dependency runs the other way: agent-bridge/src/adapters/feature-kit adapts it. Once this breaks, neither half can be replaced without the other. This catches a relative import across the two packages; an import by package name resolves into build/, which is excluded below, and is banned by an ESLint rule instead.",
+				"feature-kit may import app-commands types, and nothing else from it - principle 10 is only worth something if the core can be replaced without the feature layer following. A value import means the two halves are welded together. `tsPreCompilationDeps` keeps type-only imports in the graph, so `dependencyTypesNot` is what lets them through while a runtime import still fails.",
 			severity: "error",
 			from: { path: "^packages/feature-kit" },
-			to: { path: ["^packages/agent-bridge", ...inNodeModules("agent-bridge")] },
+			to: {
+				path: ["^packages/app-commands", ...inNodeModules("@janodetzel/app-commands")],
+				dependencyTypesNot: ["type-only"],
+			},
 		},
 		{
 			name: "no-unresolvable",

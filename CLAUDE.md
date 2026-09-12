@@ -1,17 +1,22 @@
-# agent-bridge
+# app-commands
 
 A pnpm workspace holding two packages and a todo-list example app that uses both:
 
-- `packages/agent-bridge` - an Expo dev tools plugin. Transport, protocol, CLI, MCP
-  server, web UI, and the adapters. It knows four things per command and nothing
-  about how the app is built.
-- `packages/feature-kit` - an architecture pattern. `defineFeature`, and the ESLint
-  plugin that enforces the principles. It never imports agent-bridge.
+- `packages/app-commands` - published as `@janodetzel/app-commands`. Transport,
+  protocol, CLI, MCP server, web UI, the conformance suite, and the adapters. It
+  knows four things per command and nothing about how the app is built. The Expo
+  dev tools transport sits behind the `/expo` subpath.
+- `packages/feature-kit` - published as `@janodetzel/feature-kit`. An architecture
+  pattern: `defineFeature`, plus the ESLint and dependency-cruiser configs that
+  enforce the principles. It never imports app-commands at runtime.
 - `apps/example-app` - the example, built on both.
 
-`docs/architecture-principles-and-registry.md` is the source of truth. It supersedes
-parts of `docs/agent-bridge-architecture.md` and `docs/package-architecture.md`, and
-says which parts. Read it before changing a layer boundary or the protocol.
+`docs/principles.md` is the source of truth: eleven principles, each with a
+mechanical check. Read it before changing a layer boundary or the protocol, and do
+not restate it elsewhere - link to it.
+
+`docs/architecture-principles-and-registry.md`, `docs/agent-bridge-architecture.md`
+and `docs/package-architecture.md` predate it and still use the old package names.
 
 The example app keeps logic and UI together in `src/features/<feature>/`, and
 `src/app/instances.ts` is the only file that creates instances and wires features
@@ -24,11 +29,11 @@ Code skills through `.claude/skills`:
 
 | Skill                      | Use it when                                                      |
 | -------------------------- | ---------------------------------------------------------------- |
-| `driving-the-app`          | Verifying behavior at runtime with `pnpm agent-bridge`           |
+| `driving-the-app`          | Verifying behavior at runtime with `pnpm cmd`                    |
 | `workspace-setup`          | Installing, building, running the app, debugging the environment |
 | `building-a-feature`       | Adding a screen, a store, a mutation, or an entry point          |
 | `state-architecture`       | Deciding how a feature holds state                               |
-| `maintaining-agent-bridge` | Changing the plugin: protocol, CLI, adapters, wire format        |
+| `maintaining-app-commands` | Changing the plugin: protocol, CLI, adapters, wire format        |
 
 ## Checks
 
@@ -38,7 +43,8 @@ Run these before you call a change done:
 pnpm typecheck && pnpm lint && pnpm test && pnpm depcruise
 ```
 
-`pnpm --filter agent-bridge build:all` builds the plugin and exports the web UI.
+`pnpm --filter @janodetzel/app-commands build:all` builds the plugin and exports the
+web UI.
 `pnpm --filter example-app check:release-bundle` exports a production bundle and fails
 if the bridge appears in it.
 
@@ -59,15 +65,17 @@ if the bridge appears in it.
 This is the design's load-bearing wall. `pnpm depcruise` enforces it; when a rule
 blocks you, move the code, do not widen the rule.
 
-- `packages/agent-bridge/src/core` imports **nothing** - not zod, not a UI library,
+- `packages/app-commands/src/core` imports **nothing** - not zod, not a UI library,
   not feature-kit. It knows `Command` and `Registry` and how to answer a request.
-- `packages/agent-bridge/src/adapters/<lib>` imports only `<lib>`, zod, and core.
+- `packages/app-commands/src/adapters/<lib>` imports only `<lib>`, zod, and core.
   zod is shared because core has no validation library, so every adapter describes
   its arguments in zod and converts them in `adapters/zod.ts`.
-- `packages/feature-kit` never imports `agent-bridge`. The dependency runs the other
-  way: `agent-bridge/src/adapters/feature-kit` adapts it, like Apollo. depcruise
-  catches a relative import; an import by package name is banned by ESLint, because
-  it resolves into `build/`, which depcruise excludes.
+- `packages/feature-kit` may name `@janodetzel/app-commands` in an `import type` and
+  nowhere else. The runtime dependency runs the other way:
+  `app-commands/src/adapters/feature-kit` adapts it, like Apollo. depcruise catches a
+  relative import and a value import by package name; ESLint's
+  `@typescript-eslint/no-restricted-imports` with `allowTypeImports` catches the rest,
+  because a package-name import resolves into `build/`, which depcruise excludes.
 
 In the app the boundaries are feature-kit's ESLint rules, matching on file names and
 resolved paths: `no-ui-in-logic`, `no-cross-feature-import`, `no-set-outside-store`,
@@ -102,8 +110,9 @@ or `index.ts` directly inside a feature folder. The match is by name, so a
 - `src/app/commands.ts` is the only place the two layers meet: `buildRegistry` merges
   the slices that `featureCommands`, `apolloCommands` and `navigationCommands`
   return. Build it at module scope.
-- `App.tsx` calls `useAgentBridge(commandRegistry)`. No Metro config and no special
-  import path. `agent-bridge` is a no-op in production, which drops the hook and
+- `App.tsx` calls `useAppCommands(commandRegistry)` from
+  `@janodetzel/app-commands/expo`. No Metro config and no special import path. The
+  `/expo` entry is a no-op in production, which drops the hook and
   with it the only thing that connects the app to Metro. The schemas, the
   descriptions and `handleRequest` do ship, unreachable, so it is bundle size rather
   than exposure. Do not write a secret into a command description.
@@ -117,10 +126,10 @@ or `index.ts` directly inside a feature folder. The match is by name, so a
 
 ## Verifying behavior in the simulator
 
-The running app exposes its business logic through `pnpm agent-bridge`.
+The running app exposes its business logic through `pnpm cmd`.
 
 1. Start Metro and the simulator first. Exit code 2 means the app is not connected.
-2. Run `pnpm agent-bridge commands` to see every command and its arguments.
+2. Run `pnpm cmd commands` to see every command and its arguments.
 3. After a code change, reload the app (press `r` in Metro) before you run commands.
 4. After a mutation that touches server data, compare `todos.list --source cache`
    with `todos.list --source network`, in that order. A difference means the cache
@@ -133,7 +142,7 @@ The running app exposes its business logic through `pnpm agent-bridge`.
 7. Every store action and operation function must return a promise that resolves
    when the work is done. Never fire and forget.
 
-`.mcp.json` registers an `agent-bridge` MCP server that exposes the same commands as
+`.mcp.json` registers an `app-commands` MCP server that exposes the same commands as
 tools, named with `_` in place of the dot (`todos.add` becomes `todos_add`). Prefer
 those tools when they are in your tool list; call the `commands` tool after reloading
 the app, because the tool list is a snapshot.

@@ -1,15 +1,18 @@
-import { apolloCommands } from "agent-bridge/apollo";
-import { buildRegistry } from "agent-bridge/core";
-import { zodCommands } from "agent-bridge/zod";
-import { featureCommands } from "agent-bridge/feature-kit";
-import { navigationCommands, type NavigationRef } from "agent-bridge/react-navigation";
+import { apolloCommands } from "@janodetzel/app-commands/adapters/apollo";
+import { buildRegistry } from "@janodetzel/app-commands";
+import { zodCommands } from "@janodetzel/app-commands/adapters/zod";
+import { featureCommands } from "@janodetzel/app-commands/adapters/feature-kit";
+import {
+	navigationCommands,
+	type NavigationRef,
+} from "@janodetzel/app-commands/adapters/react-navigation";
 
 import { RouteName } from "../navigation/routes";
 import { apolloClient, navigationRef, news, settings, todos } from "./instances";
 import { z } from "zod";
 
 /**
- * Everything the agent-bridge plugin can reach.
+ * Everything the app-commands plugin can reach.
  *
  * The features carry their own namespaces and specs, so nothing is registered by
  * hand; `featureCommands` reads them. The adapters are the same shape - each
@@ -21,10 +24,10 @@ import { z } from "zod";
  */
 export const commandRegistry = buildRegistry(
 	featureCommands(todos, news, settings),
-	zodCommands("example-command", {
+	zodCommands("exampleCommand", {
 		inout: {
 			args: z.object({ arg: z.string() }),
-			description: "A command that forwards it's input",
+			description: "A command that forwards its input",
 			run: async ({ arg }) => ({ arg }),
 		},
 	}),

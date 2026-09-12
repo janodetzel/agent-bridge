@@ -1,5 +1,5 @@
 import js from "@eslint/js";
-import featureKit from "feature-kit/eslint";
+import featureKit from "@janodetzel/feature-kit/eslint";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -12,8 +12,8 @@ export default tseslint.config(
 			"**/.expo/**",
 			"**/*.config.js",
 			"**/.eslintrc.js",
-			"packages/agent-bridge/scripts/**",
-			"packages/agent-bridge/webui/**",
+			"packages/app-commands/scripts/**",
+			"packages/app-commands/webui/**",
 			"apps/*/ios/**",
 			"apps/*/android/**",
 		],
@@ -52,21 +52,23 @@ export default tseslint.config(
 		files: ["apps/*/src/**/*.ts", "apps/*/src/**/*.tsx"],
 	})),
 	{
-		// feature-kit is an architecture pattern, not part of the bridge. The
-		// dependency runs the other way: agent-bridge/src/adapters/feature-kit adapts
-		// it. dependency-cruiser catches a relative import across the two packages,
-		// but not one by package name - that resolves into build/, which is excluded
-		// from its graph - so the specifier is banned here instead.
+		// feature-kit may name app-commands in an `import type` and nowhere else.
+		// dependency-cruiser catches a relative import across the two packages, but
+		// not one by package name - that resolves into build/, which is excluded from
+		// its graph - so the specifier is constrained here instead. `allowTypeImports`
+		// is the whole point: a type edge costs nothing at runtime, a value edge welds
+		// the feature layer to one transport.
 		files: ["packages/feature-kit/**/*.{ts,tsx,mts,mjs}"],
 		rules: {
-			"no-restricted-imports": [
+			"@typescript-eslint/no-restricted-imports": [
 				"error",
 				{
 					patterns: [
 						{
-							group: ["agent-bridge", "agent-bridge/*"],
+							group: ["@janodetzel/app-commands", "@janodetzel/app-commands/*"],
+							allowTypeImports: true,
 							message:
-								"feature-kit never imports agent-bridge. If the bridge needs something from here, it belongs in agent-bridge/src/adapters/feature-kit.",
+								"feature-kit imports app-commands types only. A value import makes the two halves unreplaceable; keep the runtime edge in an adapter.",
 						},
 					],
 				},
@@ -74,9 +76,9 @@ export default tseslint.config(
 		},
 	},
 	{
-		// Keeping the bridge out of a release build depends on a lazy require in a
+		// Keeping the transport out of a release build depends on a lazy require in a
 		// branch the bundler drops. Written any other way, it ships to users.
-		files: ["packages/agent-bridge/src/index.ts"],
+		files: ["packages/app-commands/src/expo/index.ts"],
 		rules: {
 			"@typescript-eslint/ban-ts-comment": "off",
 			"@typescript-eslint/consistent-type-imports": "off",
