@@ -8,7 +8,7 @@ description: Work on the app-commands package itself - the core protocol, the ap
 ```
 packages/app-commands/
 	src/core/       protocol, Command/Registry, handleRequest, toJsonSafe - imports NOTHING
-	src/app/        useAgentBridge, and the transport-agnostic attach()
+	src/expo/       useAppCommands, and the transport-agnostic attach()
 	src/adapters/   one file per library, each importing only that library, zod, and core
 	src/index.ts    the production no-op
 	cli/            client, flags, entry point
@@ -74,7 +74,7 @@ called `setState` would put the app in a state no tap can produce.
 copy of the constants. `pnpm build` builds both halves; a CLI change that seems to
 do nothing is usually a stale `build/cli`.
 
-The CLI hard-codes no command. It fetches `commands` on every call and builds flags
+The CLI hard-codes no command. It sends a `commands` request on every call and builds flags
 from the JSON Schema, so a new command works after a Metro reload with no CLI
 rebuild. Keep it that way. Validate locally only what the flag parser needs - the
 app owns validation and answers `INVALID_ARGS` with the Zod issues.
@@ -86,18 +86,18 @@ stdout stays exactly one JSON document per call. Diagnostics go to stderr.
 `mcp/` is a second front end over `cli/client.ts`, not a wrapper around the binary.
 It hard-codes no command either: every command becomes a tool, built from the JSON
 Schema the app reports, with the dot in the name replaced by `_`. The two tools that
-are always there - `commands` and `run` - exist because a client starts the server
+are always there - `list` and `run` - exist because a client starts the server
 before Metro is up, so the first `tools/list` finds no app. Answering it with those
-two rather than an error keeps `commands` reachable, and calling it once the app is
+two rather than an error keeps `list` reachable, and calling it once the app is
 up sends `tools/list_changed`.
 
 Three things to keep:
 
 - **Connect per call, like the CLI.** The app keeps one client at a time. A resident
-  server would drop a terminal running `appcmd` and be dropped by it in turn.
+  server would drop a terminal running `app-commands` and be dropped by it in turn.
 - **Nothing but MCP traffic on stdout.** `cli/client.ts` and `cli/wire/` are silent,
   which is what makes them reusable here. Diagnostics go to stderr, and `.mcp.json`
-  runs `node_modules/.bin/appcmd-mcp` rather than a `pnpm` script, because
+  runs `node_modules/.bin/app-commands-mcp` rather than a `pnpm` script, because
   pnpm writes its banner to stdout.
 - **The app still owns validation.** The schema goes through untouched but for
   `$schema`, and a failure comes back as `isError` carrying the same

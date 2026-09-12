@@ -4,7 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { AgentBridgeClient } from "../cli/client";
+import { AppCommandsClient } from "../cli/client";
 import type { Registry } from "../src/core/command";
 import {
 	startFakeApp,
@@ -58,7 +58,7 @@ afterEach(async () => {
 describe("the CLI client", () => {
 	it("gets the command list from the app", async () => {
 		app = await startFakeApp(broadcaster.port, registry);
-		const client = await AgentBridgeClient.connect({ port: broadcaster.port });
+		const client = await AppCommandsClient.connect({ port: broadcaster.port });
 
 		const commands = await client.commands();
 		expect(commands.map((c) => c.name)).toEqual(["demo.echo", "demo.fail"]);
@@ -70,8 +70,8 @@ describe("the CLI client", () => {
 	it("gives two clients running at once only their own responses", async () => {
 		// The real app would drop the first client here; this isolates the clientId filter.
 		app = await startFakeApp(broadcaster.port, registry, { terminateDuplicateClients: false });
-		const first = await AgentBridgeClient.connect({ port: broadcaster.port });
-		const second = await AgentBridgeClient.connect({ port: broadcaster.port });
+		const first = await AppCommandsClient.connect({ port: broadcaster.port });
+		const second = await AppCommandsClient.connect({ port: broadcaster.port });
 
 		const [a, b] = await Promise.all([
 			first.run("demo.echo", { value: "first" }),
@@ -86,7 +86,7 @@ describe("the CLI client", () => {
 	});
 
 	it("fails within 4 seconds when no app is connected", async () => {
-		const client = await AgentBridgeClient.connect({ port: broadcaster.port });
+		const client = await AppCommandsClient.connect({ port: broadcaster.port });
 		const started = Date.now();
 
 		await expect(client.commands()).rejects.toThrow(/did not answer/);
@@ -97,10 +97,10 @@ describe("the CLI client", () => {
 
 	it("reports being dropped when a second client connects", async () => {
 		app = await startFakeApp(broadcaster.port, registry);
-		const first = await AgentBridgeClient.connect({ port: broadcaster.port });
+		const first = await AppCommandsClient.connect({ port: broadcaster.port });
 		await first.commands();
 
-		const second = await AgentBridgeClient.connect({ port: broadcaster.port });
+		const second = await AppCommandsClient.connect({ port: broadcaster.port });
 		await expect(first.commands()).rejects.toThrow(/dropped this client/);
 
 		first.close();
@@ -108,7 +108,7 @@ describe("the CLI client", () => {
 	});
 });
 
-describe("the appcmd binary", () => {
+describe("the app-commands binary", () => {
 	const run = async (args: string[], port = broadcaster.port) => {
 		if (!existsSync(BINARY)) {
 			throw new Error(
@@ -131,7 +131,7 @@ describe("the appcmd binary", () => {
 
 	it("prints the command list as JSON that jq accepts (exit 0)", async () => {
 		app = await startFakeApp(broadcaster.port, registry);
-		const { code, stdout } = await run(["commands"]);
+		const { code, stdout } = await run(["list"]);
 
 		expect(code).toBe(0);
 		const jq = spawnSync("jq", ["-e", "length == 2"], { input: stdout, encoding: "utf8" });
@@ -181,7 +181,7 @@ describe("the appcmd binary", () => {
 	}, 20_000);
 
 	it("exits 2 when nothing listens (exit 2)", async () => {
-		const { code, stdout, stderr } = await run(["commands"], 1);
+		const { code, stdout, stderr } = await run(["list"], 1);
 
 		expect(code).toBe(2);
 		expect(JSON.parse(stdout)).toMatchObject({ code: "CONNECTION_FAILED" });
@@ -189,7 +189,7 @@ describe("the appcmd binary", () => {
 	}, 20_000);
 
 	it("exits 2 when Metro is up but no app answers", async () => {
-		const { code, stdout } = await run(["commands"]);
+		const { code, stdout } = await run(["list"]);
 
 		expect(code).toBe(2);
 		expect(JSON.parse(stdout)).toMatchObject({ code: "CONNECTION_FAILED" });

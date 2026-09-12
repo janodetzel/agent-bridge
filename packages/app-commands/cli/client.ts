@@ -44,7 +44,7 @@ type Pending = {
 	timer: NodeJS.Timeout;
 };
 
-export class AgentBridgeClient {
+export class AppCommandsClient {
 	/** One per process. Every other client's responses are dropped. */
 	readonly clientId = randomUUID();
 
@@ -68,12 +68,12 @@ export class AgentBridgeClient {
 		});
 	}
 
-	static async connect(options: ClientOptions = {}): Promise<AgentBridgeClient> {
+	static async connect(options: ClientOptions = {}): Promise<AppCommandsClient> {
 		const host = options.host ?? DEFAULT_HOST;
 		const port = options.port ?? DEFAULT_PORT;
 		const handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
 
-		let client: AgentBridgeClient;
+		let client: AppCommandsClient;
 		try {
 			const connection = await BrowserPluginConnection.connect({
 				devServer: `${host}:${port}`,
@@ -81,7 +81,7 @@ export class AgentBridgeClient {
 				connectTimeoutMs: handshakeTimeoutMs,
 				onTerminated: (reason) => client?.onTerminated(reason),
 			});
-			client = new AgentBridgeClient(connection, handshakeTimeoutMs);
+			client = new AppCommandsClient(connection, handshakeTimeoutMs);
 		} catch (e) {
 			throw new ConnectionError(
 				`cannot reach Metro at ${host}:${port}: ${e instanceof Error ? e.message : String(e)}`,
@@ -95,7 +95,7 @@ export class AgentBridgeClient {
 		const response = await this.send(
 			{ cmd: "commands" },
 			this.handshakeTimeoutMs,
-			"the app did not answer. Is Metro running with the app connected, and does the app call useAgentBridge?",
+			"the app did not answer. Is Metro running with the app connected, and does the app call useAppCommands?",
 		);
 		if (!response.ok) {
 			throw new ResponseError(response);

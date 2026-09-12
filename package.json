@@ -11,8 +11,8 @@
 		"depcruise": "depcruise packages apps --config .dependency-cruiser.cjs",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"cmd": "appcmd",
-		"cmd:mcp": "appcmd-mcp"
+		"app-commands": "app-commands",
+		"app-commands-mcp": "app-commands-mcp"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

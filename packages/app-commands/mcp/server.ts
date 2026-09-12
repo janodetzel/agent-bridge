@@ -3,12 +3,12 @@
  *
  * Every app command becomes an MCP tool, built from the JSON Schema the app
  * reports, so an agent calls `todos_add` with typed arguments instead of shelling
- * out. Two tools are always present: `commands` lists what the app has right now,
+ * out. Two tools are always present: `list` returns what the app has right now,
  * and `run` calls a command by name when the tool list has gone stale.
  *
  * Like the CLI, it connects per call and disconnects. The app keeps one client at a
  * time, so a server holding the socket open would drop a terminal running
- * `appcmd` and be dropped by it in turn.
+ * `app-commands` and be dropped by it in turn.
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -19,7 +19,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import type { CommandInfo } from "../src/core/protocol";
-import { AgentBridgeClient, ResponseError, type ClientOptions } from "../cli/client";
+import { AppCommandsClient, ResponseError, type ClientOptions } from "../cli/client";
 import { buildTools, differs, EMPTY_TOOL_MAP, type ToolDefinition, type ToolMap } from "./tools";
 
 export type McpServerOptions = ClientOptions & {
@@ -27,9 +27,9 @@ export type McpServerOptions = ClientOptions & {
 	defaultTimeoutMs?: number;
 };
 
-const COMMANDS_TOOL = "commands";
+const LIST_TOOL = "list";
 const RUN_TOOL = "run";
-const RESERVED = new Set([COMMANDS_TOOL, RUN_TOOL]);
+const RESERVED = new Set([LIST_TOOL, RUN_TOOL]);
 
 const UNREACHABLE_HINT =
 	"Start Metro and the app in a simulator, then try again. Only one CLI, web console, " +
@@ -37,7 +37,7 @@ const UNREACHABLE_HINT =
 
 const META_TOOLS: ToolDefinition[] = [
 	{
-		name: COMMANDS_TOOL,
+		name: LIST_TOOL,
 		description:
 			"Lists every command the running app exposes, with the JSON Schema of its arguments. " +
 			"Call it when the app was not running yet, or after reloading the app, to bring the " +
@@ -70,8 +70,8 @@ export function createServer(options: McpServerOptions = {}): Server {
 	const { defaultTimeoutMs, ...clientOptions } = options;
 	let advertised: ToolMap = EMPTY_TOOL_MAP;
 
-	async function withClient<T>(fn: (client: AgentBridgeClient) => Promise<T>): Promise<T> {
-		const client = await AgentBridgeClient.connect(clientOptions);
+	async function withClient<T>(fn: (client: AppCommandsClient) => Promise<T>): Promise<T> {
+		const client = await AppCommandsClient.connect(clientOptions);
 		try {
 			return await fn(client);
 		} finally {
@@ -92,7 +92,7 @@ export function createServer(options: McpServerOptions = {}): Server {
 	server.setRequestHandler(ListToolsRequestSchema, async () => {
 		try {
 			// The app is usually not running when a client starts the server. Falling back
-			// to the two meta tools keeps `commands` reachable, which is what brings the
+			// to the two meta tools keeps `list` reachable, which is what brings the
 			// rest of the list in.
 			await refresh(false);
 		} catch (e) {
@@ -104,7 +104,7 @@ export function createServer(options: McpServerOptions = {}): Server {
 	server.setRequestHandler(CallToolRequestSchema, async (request) => {
 		const { name, arguments: args } = request.params;
 
-		if (name === COMMANDS_TOOL) {
+		if (name === LIST_TOOL) {
 			try {
 				return ok(await refresh(true));
 			} catch (e) {
@@ -127,7 +127,7 @@ export function createServer(options: McpServerOptions = {}): Server {
 		const command = advertised.commandOf.get(name);
 		if (!command) {
 			return error({
-				error: `unknown tool "${name}". Call "commands" to see what the app exposes now.`,
+				error: `unknown tool "${name}". Call "list" to see what the app exposes now.`,
 				code: "UNKNOWN_COMMAND",
 			});
 		}

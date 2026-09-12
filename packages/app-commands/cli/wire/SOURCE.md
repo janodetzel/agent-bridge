@@ -47,7 +47,7 @@ re-export. `DevToolsPluginClientImplBrowser` still exists, under the new package
    ```json
    {
    	"protocolVersion": 1,
-   	"pluginName": "agent-bridge",
+   	"pluginName": "commands",
    	"method": "handshake",
    	"browserClientId": "1757619000000",
    	"__isHandshakeMessages": true
@@ -58,7 +58,7 @@ re-export. `DevToolsPluginClientImplBrowser` still exists, under the new package
 
 3. Ordinary messages are packed by `MessageFramePacker`. A plain-object payload
    takes the fast path and goes out as
-   `{"messageKey":{"pluginName":"agent-bridge","method":"request"},"payload":{…}}`.
+   `{"messageKey":{"pluginName":"commands","method":"request"},"payload":{…}}`.
 
 ## Answer to open question 2: several browser clients of one plugin
 
@@ -68,7 +68,7 @@ that already has a different client, the app sends `terminateBrowserClient` for 
 _previous_ id, and that client closes itself.
 
 For this repo that means the CLI and the command console cannot be connected to
-`agent-bridge` at the same time: whichever connects second kicks the first. This is
+the `commands` plugin at the same time: whichever connects second kicks the first. This is
 not worked around. The CLI reports it as a connection error and exits with code 2.
 
 Verified against a running app, not only read from the source: with the app in the

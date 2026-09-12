@@ -3,14 +3,14 @@
 	"version": "0.1.0",
 	"description": "Run typed commands against a running app from a CLI, an MCP server, or the Metro dev tools. Knows no UI framework.",
 	"author": "Jano Detzel <jano@janodetzel.com>",
-	"homepage": "https://github.com/janodetzel/agent-bridge#readme",
+	"homepage": "https://github.com/janodetzel/app-commands#readme",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/janodetzel/agent-bridge.git",
+		"url": "git+https://github.com/janodetzel/app-commands.git",
 		"directory": "packages/app-commands"
 	},
 	"bugs": {
-		"url": "https://github.com/janodetzel/agent-bridge/issues"
+		"url": "https://github.com/janodetzel/app-commands/issues"
 	},
 	"publishConfig": {
 		"access": "public"
@@ -121,7 +121,7 @@
 		}
 	},
 	"bin": {
-		"appcmd": "./build/cli/index.js",
-		"appcmd-mcp": "./build/mcp/index.js"
+		"app-commands": "./build/cli/index.js",
+		"app-commands-mcp": "./build/mcp/index.js"
 	}
 }

@@ -1,6 +1,6 @@
 ---
 name: driving-the-app
-description: Run commands against the app in a simulator with `pnpm cmd` to verify behavior, read state, or navigate. Use when checking whether a change actually works at runtime, when inspecting the Apollo cache or a Zustand store, when a bug reproduces only in the running app, or when a task says to verify in the simulator. Covers the exit codes, the cache-versus-network check, the connection rules, and when to reach for the ios-simulator or android-emulator skills instead.
+description: Run commands against the app in a simulator with `pnpm app-commands` to verify behavior, read state, or navigate. Use when checking whether a change actually works at runtime, when inspecting the Apollo cache or a Zustand store, when a bug reproduces only in the running app, or when a task says to verify in the simulator. Covers the exit codes, the cache-versus-network check, the connection rules, and when to reach for the ios-simulator or android-emulator skills instead.
 ---
 
 # Driving the app from the CLI
@@ -20,7 +20,7 @@ verify here is what a user gets.
 ## Finding out what exists
 
 ```
-pnpm cmd commands
+pnpm app-commands list
 ```
 
 Returns every command with its description and the JSON Schema of its arguments.
@@ -30,10 +30,10 @@ not with the CLI.
 ## Calling a command
 
 ```
-pnpm cmd todos.add --title "Buy milk"
-pnpm cmd todos.list --source cache
-pnpm cmd settings.setUnits --units mi
-pnpm cmd nav.navigate --screen Settings
+pnpm app-commands todos.add --title "Buy milk"
+pnpm app-commands todos.list --source cache
+pnpm app-commands settings.setUnits --units mi
+pnpm app-commands nav.navigate --screen Settings
 ```
 
 Flags come from the schema: strings take the value as typed, numbers are parsed, a
@@ -60,8 +60,8 @@ carries the duration and the error, for a human.
 After a mutation that touches server data, compare the two sources, **cache first**:
 
 ```
-pnpm cmd todos.list --source cache
-pnpm cmd todos.list --source network
+pnpm app-commands todos.list --source cache
+pnpm app-commands todos.list --source network
 ```
 
 They must match. A difference means the `update` in the feature's operation
@@ -88,8 +88,8 @@ your tool list, prefer them: they are the same commands over the same client, an
 the arguments are checked before the call.
 
 Two rules carry over. The tool list is a snapshot, so after reloading the app call
-the `commands` tool to pick up anything new; and the server counts against the one
-client at a time rule below, so a `pnpm cmd` call in a terminal and a tool
+the `list` tool to pick up anything new; and the server counts against the one
+client at a time rule below, so a `pnpm app-commands` call in a terminal and a tool
 call drop each other.
 
 ## When to use the simulator skills instead
@@ -98,13 +98,13 @@ The `ios-simulator` and `android-emulator` skills drive the device through
 `agent-device`: they tap, type, scroll, and read the live UI tree. They answer a
 different question than this bridge does.
 
-| Question                                                                   | Reach for                                                    |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Did the mutation land? What is in the cache or the store?                  | `pnpm cmd <command>`                                         |
-| Do cache and server agree after a write?                                   | `pnpm cmd todos.list --source cache` then `--source network` |
-| Does the screen render that state correctly?                               | `ios-simulator` / `android-emulator`                         |
-| Is the button actually wired to the logic? Does the flow work when tapped? | `ios-simulator` / `android-emulator`                         |
-| Which screen is focused, and can I get to another one?                     | either: `nav.navigate` is faster, a tap is more faithful     |
+| Question                                                                   | Reach for                                                             |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Did the mutation land? What is in the cache or the store?                  | `pnpm app-commands <command>`                                         |
+| Do cache and server agree after a write?                                   | `pnpm app-commands todos.list --source cache` then `--source network` |
+| Does the screen render that state correctly?                               | `ios-simulator` / `android-emulator`                                  |
+| Is the button actually wired to the logic? Does the flow work when tapped? | `ios-simulator` / `android-emulator`                                  |
+| Which screen is focused, and can I get to another one?                     | either: `nav.navigate` is faster, a tap is more faithful              |
 
 A command calls the same function a tap calls, which is the point — but that also
 means it never exercises the tap handler, the disabled state, or the layout. Only a

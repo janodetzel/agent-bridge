@@ -131,7 +131,7 @@ describe("the MCP server", () => {
 		app = await startFakeApp(broadcaster.port, registry);
 		const { tools } = await (await connect()).listTools();
 
-		expect(tools.map((t) => t.name)).toEqual(["commands", "run", "demo_echo", "demo_fail"]);
+		expect(tools.map((t) => t.name)).toEqual(["list", "run", "demo_echo", "demo_fail"]);
 		expect(tools[2]!.description).toContain("app-commands command: demo.echo");
 		expect(tools[2]!.inputSchema).toMatchObject({ type: "object", required: ["value"] });
 	}, 20_000);
@@ -161,7 +161,7 @@ describe("the MCP server", () => {
 
 	it("lists the commands with their schemas", async () => {
 		app = await startFakeApp(broadcaster.port, registry);
-		const result = await (await connect()).callTool({ name: "commands", arguments: {} });
+		const result = await (await connect()).callTool({ name: "list", arguments: {} });
 
 		const commands = payload(result) as CommandInfo[];
 		expect(commands.map((c) => c.name)).toEqual(["demo.echo", "demo.fail"]);
@@ -203,15 +203,15 @@ describe("the MCP server", () => {
 		const connected = await connect();
 
 		const { tools } = await connected.listTools();
-		expect(tools.map((t) => t.name)).toEqual(["commands", "run"]);
+		expect(tools.map((t) => t.name)).toEqual(["list", "run"]);
 
-		const result = await connected.callTool({ name: "commands", arguments: {} });
+		const result = await connected.callTool({ name: "list", arguments: {} });
 		expect(result.isError).toBe(true);
 		expect(payload(result)).toMatchObject({ code: "CONNECTION_FAILED" });
 	}, 30_000);
 
 	it("says how to reach the app when Metro is down", async () => {
-		const result = await (await connect(1)).callTool({ name: "commands", arguments: {} });
+		const result = await (await connect(1)).callTool({ name: "list", arguments: {} });
 
 		expect(payload(result)).toMatchObject({ code: "CONNECTION_FAILED" });
 		expect(JSON.stringify(payload(result))).toMatch(/Start Metro/);

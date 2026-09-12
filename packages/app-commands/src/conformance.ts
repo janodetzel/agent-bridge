@@ -117,7 +117,7 @@ function schemaProblems(name: string, schema: unknown): ConformanceProblem[] {
 	} catch {
 		problems.push({
 			command: name,
-			problem: "has a jsonSchema that cannot be serialized, so `commands` cannot list it",
+			problem: "has a jsonSchema that cannot be serialized, so the command list cannot include it",
 		});
 	}
 

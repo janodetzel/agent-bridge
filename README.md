@@ -5,8 +5,8 @@ An AI agent that works on a mobile app has a slow way to check its work. It taps
 This project is about a different way to build the app. Every capability the app has can be reached by name, with typed arguments, from outside the user interface:
 
 ```
-$ pnpm cmd todos.add --title "Buy milk"
-$ pnpm cmd todos.list --source network
+$ pnpm app-commands todos.add --title "Buy milk"
+$ pnpm app-commands todos.list --source network
 ```
 
 The command runs inside the running app. It calls the same function the **Add** button calls, on the same store, the same GraphQL cache, and the same navigation reference. So the agent sets up a state, exercises a behavior, and reads the result in one call, and it verifies the code path a user takes.
@@ -69,10 +69,10 @@ The principles are constraints, not a framework. They name no state library, nav
 
 The packages make the principles cheap to follow and expensive to break. They are separate on purpose, and the runtime dependency runs one way.
 
-| Package                                             | What it is                                                                                                                                                                                                                |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@janodetzel/app-commands`](packages/app-commands) | The command contract, `handleRequest`, the wire protocol, the `appcmd` CLI, an MCP server, a web console, and adapters for feature-kit, Apollo, React Navigation, Zustand, and zod. The Expo transport is behind `/expo`. |
-| [`@janodetzel/feature-kit`](packages/feature-kit)   | `defineFeature`, five ESLint rules, and a dependency-cruiser rule that keep a feature callable from outside React. It never imports app-commands at runtime.                                                              |
+| Package                                             | What it is                                                                                                                                                                                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@janodetzel/app-commands`](packages/app-commands) | The command contract, `handleRequest`, the wire protocol, the `app-commands` CLI, an MCP server, a web console, and adapters for feature-kit, Apollo, React Navigation, Zustand, and zod. The Expo transport is behind `/expo`. |
+| [`@janodetzel/feature-kit`](packages/feature-kit)   | `defineFeature`, five ESLint rules, and a dependency-cruiser rule that keep a feature callable from outside React. It never imports app-commands at runtime.                                                                    |
 
 The core of app-commands knows four things about a command: a description, a JSON Schema, a `parse` function, and a `run` function. It imports nothing, so it works with an app built on Redux, XState, MobX, or plain service classes. feature-kit is one way to produce those four things, and `app-commands/adapters/feature-kit` joins the two.
 
@@ -121,10 +121,10 @@ To start Metro and the app, run `pnpm --filter example-app start` and open the a
 With the app open, list its commands and call one:
 
 ```
-$ pnpm cmd commands
-$ pnpm cmd todos.add --title "Buy milk"
-$ pnpm cmd todos.list --source cache
-$ pnpm cmd nav.navigate --screen Settings
+$ pnpm app-commands list
+$ pnpm app-commands todos.add --title "Buy milk"
+$ pnpm app-commands todos.list --source cache
+$ pnpm app-commands nav.navigate --screen Settings
 ```
 
 The CLI asks the app for its commands on every call, so a new command works after a Metro reload. Exit code 2 means the CLI could not reach the app.

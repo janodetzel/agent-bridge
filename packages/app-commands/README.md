@@ -5,7 +5,7 @@ calls the same store action or operation function a tap in the UI calls, on the
 same instances, so what an agent verifies is what the user gets.
 
 ```
-$ pnpm cmd nav.navigate --screen Settings
+$ pnpm app-commands nav.navigate --screen Settings
 {"name":"Settings","params":null}
 ```
 
@@ -24,8 +24,8 @@ why this package is shaped the way it is. The feature-side conventions live in
 | `@janodetzel/app-commands/protocol`    | The wire types, for another client                                                                                                                             |
 | `@janodetzel/app-commands/adapters/*`  | The adapters: `apollo`, `react-navigation`, `zustand`, `zod`, `feature-kit`. One library each, so an optional peer you did not install is one you never import |
 
-The binaries are `appcmd` and `appcmd-mcp`. The repo spells the first one
-`pnpm cmd`, so there is one invocation in the docs.
+The binaries are `app-commands` and `app-commands-mcp`. From the repo root, run the CLI
+as `pnpm app-commands`.
 
 ## Installing it in the workspace
 
@@ -34,7 +34,7 @@ The binaries are `appcmd` and `appcmd-mcp`. The repo spells the first one
 "dependencies": { "@janodetzel/app-commands": "workspace:*" }
 ```
 
-Add it to the root `package.json` as well, so `pnpm cmd` works from the repo
+Add it to the root `package.json` as well, so `pnpm app-commands` works from the repo
 root: pnpm links a binary into the `node_modules/.bin` of the package that
 depends on it.
 
@@ -118,9 +118,9 @@ settles, for a caller that sent no timeout of its own, and defaults to 10 second
 ## Using the CLI
 
 ```
-appcmd commands
-appcmd <namespace>.<name> [--<arg> <value> …]
-appcmd <namespace>.<name> --args '<json>'
+app-commands list
+app-commands <namespace>.<name> [--<arg> <value> …]
+app-commands <namespace>.<name> --args '<json>'
 ```
 
 Global options: `--host` (default `localhost`), `--port` (default `8081`),
@@ -158,31 +158,31 @@ call. The iOS simulator reaches `localhost` without it.
 
 ## The MCP server
 
-`appcmd-mcp` speaks MCP over stdio and exposes the same commands as tools, so
+`app-commands-mcp` speaks MCP over stdio and exposes the same commands as tools, so
 an agent calls them with typed arguments instead of shelling out. Register it by
 pointing a client at the binary:
 
 ```json
 {
 	"mcpServers": {
-		"app-commands": { "command": "node_modules/.bin/appcmd-mcp", "args": [] }
+		"app-commands": { "command": "node_modules/.bin/app-commands-mcp", "args": [] }
 	}
 }
 ```
 
 It takes the same `--host`, `--port` and `--timeout` options as the CLI, or reads
-`AGENT_BRIDGE_HOST`, `AGENT_BRIDGE_PORT` and `AGENT_BRIDGE_TIMEOUT`.
+`APP_COMMANDS_HOST`, `APP_COMMANDS_PORT` and `APP_COMMANDS_TIMEOUT`.
 
 Each command becomes one tool, named with `_` in place of the dot - `todos.add`
 becomes `todos_add` - carrying the app's own argument schema. Two tools are always
-present: `commands` returns the live list and republishes the tool list if it
+present: `list` returns the live list and republishes the tool list if it
 changed, and `run` calls a command by its `<namespace>.<name>` when the tool list has
 gone stale. A failing call comes back with `isError` and the same
 `{ error, code, issues }` the CLI prints.
 
 The tool list is a snapshot taken when a client asks for it. After reloading the app,
-call `commands` to pick up anything new. The server counts against the one client at
-a time rule, so it and a terminal running `appcmd` drop each other.
+call `list` to pick up anything new. The server counts against the one client at
+a time rule, so it and a terminal running `app-commands` drop each other.
 
 Do not launch it through a package-manager script: pnpm writes its banner to stdout,
 where only MCP traffic belongs.

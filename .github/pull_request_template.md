@@ -16,4 +16,4 @@ only defense.
 ## Checks
 
 - [ ] `pnpm typecheck && pnpm lint && pnpm test && pnpm depcruise`
-- [ ] Verified at runtime with `pnpm cmd` if behavior changed.
+- [ ] Verified at runtime with `pnpm app-commands` if behavior changed.

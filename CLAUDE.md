@@ -15,9 +15,6 @@ A pnpm workspace holding two packages and a todo-list example app that uses both
 mechanical check. Read it before changing a layer boundary or the protocol, and do
 not restate it elsewhere - link to it.
 
-`docs/architecture-principles-and-registry.md`, `docs/agent-bridge-architecture.md`
-and `docs/package-architecture.md` predate it and still use the old package names.
-
 The example app keeps logic and UI together in `src/features/<feature>/`, and
 `src/app/instances.ts` is the only file that creates instances and wires features
 to each other.
@@ -29,7 +26,7 @@ Code skills through `.claude/skills`:
 
 | Skill                      | Use it when                                                      |
 | -------------------------- | ---------------------------------------------------------------- |
-| `driving-the-app`          | Verifying behavior at runtime with `pnpm cmd`                    |
+| `driving-the-app`          | Verifying behavior at runtime with `pnpm app-commands`           |
 | `workspace-setup`          | Installing, building, running the app, debugging the environment |
 | `building-a-feature`       | Adding a screen, a store, a mutation, or an entry point          |
 | `state-architecture`       | Deciding how a feature holds state                               |
@@ -126,10 +123,10 @@ or `index.ts` directly inside a feature folder. The match is by name, so a
 
 ## Verifying behavior in the simulator
 
-The running app exposes its business logic through `pnpm cmd`.
+The running app exposes its business logic through `pnpm app-commands`.
 
 1. Start Metro and the simulator first. Exit code 2 means the app is not connected.
-2. Run `pnpm cmd commands` to see every command and its arguments.
+2. Run `pnpm app-commands list` to see every command and its arguments.
 3. After a code change, reload the app (press `r` in Metro) before you run commands.
 4. After a mutation that touches server data, compare `todos.list --source cache`
    with `todos.list --source network`, in that order. A difference means the cache
@@ -144,7 +141,7 @@ The running app exposes its business logic through `pnpm cmd`.
 
 `.mcp.json` registers an `app-commands` MCP server that exposes the same commands as
 tools, named with `_` in place of the dot (`todos.add` becomes `todos_add`). Prefer
-those tools when they are in your tool list; call the `commands` tool after reloading
+those tools when they are in your tool list; call the `list` tool after reloading
 the app, because the tool list is a snapshot.
 
 Two things to keep in mind while working:

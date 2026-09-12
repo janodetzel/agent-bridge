@@ -140,7 +140,7 @@ export const commandRegistry = buildRegistry(
 );
 ```
 
-`App.tsx` passes that to `useAgentBridge`, and nothing else is needed.
+`App.tsx` passes that to `useAppCommands`, and nothing else is needed.
 
 A new screen also needs an entry in `src/navigation/routes.ts` — both in
 `RootStackParamList` and in the `RouteName` enum, which a type test keeps in sync.
@@ -175,4 +175,4 @@ rolls the store back and fails the command; an invalid argument is rejected.
 - [ ] Reads of server data take `source`
 - [ ] The feature is in `src/app/commands.ts`
 - [ ] `pnpm typecheck && pnpm lint && pnpm test && pnpm depcruise`
-- [ ] Verified in the simulator with `pnpm cmd`
+- [ ] Verified in the simulator with `pnpm app-commands`

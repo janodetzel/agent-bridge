@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import type { CommandInfo, Response } from "../src/core/protocol";
-import { AgentBridgeClient, ConnectionError, ResponseError } from "./client";
+import { AppCommandsClient, ConnectionError, ResponseError } from "./client";
 import { describeFlags, parseCommandArgs, UsageError, type JsonSchema } from "./flags";
 
 const EXIT_OK = 0;
@@ -16,9 +16,9 @@ type GlobalOptions = {
 };
 
 const USAGE = `Usage:
-  appcmd commands
-  appcmd <namespace>.<name> [--<arg> <value> ...]
-  appcmd <namespace>.<name> --args '<json>'
+  app-commands list
+  app-commands <namespace>.<name> [--<arg> <value> ...]
+  app-commands <namespace>.<name> --args '<json>'
 
 Options:
   --host <host>    Metro host (default localhost)
@@ -40,7 +40,7 @@ async function main(argv: string[]): Promise<number> {
 
 	const [name, ...tokens] = rest as [string, ...string[]];
 
-	const client = await AgentBridgeClient.connect({
+	const client = await AppCommandsClient.connect({
 		...(options.host === undefined ? {} : { host: options.host }),
 		...(options.port === undefined ? {} : { port: options.port }),
 	});
@@ -55,7 +55,7 @@ async function main(argv: string[]): Promise<number> {
 			return report(e.response, options.pretty);
 		}
 
-		if (name === "commands") {
+		if (name === "list") {
 			print(commands, options.pretty);
 			return EXIT_OK;
 		}
