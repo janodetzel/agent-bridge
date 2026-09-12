@@ -1,10 +1,12 @@
 import { apolloCommands } from "agent-bridge/apollo";
 import { buildRegistry } from "agent-bridge/core";
+import { zodCommands } from "agent-bridge/zod";
 import { featureCommands } from "agent-bridge/feature-kit";
 import { navigationCommands, type NavigationRef } from "agent-bridge/react-navigation";
 
 import { RouteName } from "../navigation/routes";
 import { apolloClient, navigationRef, news, settings, todos } from "./instances";
+import { z } from "zod";
 
 /**
  * Everything the agent-bridge plugin can reach.
@@ -19,6 +21,13 @@ import { apolloClient, navigationRef, news, settings, todos } from "./instances"
  */
 export const commandRegistry = buildRegistry(
 	featureCommands(todos, news, settings),
+	zodCommands("example-command", {
+		inout: {
+			args: z.string(),
+			description: "A command that forwards it's input",
+			run: async (args) => args,
+		},
+	}),
 	apolloCommands(apolloClient),
 	navigationCommands(navigationRef as NavigationRef, { routes: RouteName }),
 );

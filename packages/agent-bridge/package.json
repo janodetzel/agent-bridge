@@ -76,6 +76,10 @@
 			"types": "./build/adapters/zustand.d.ts",
 			"default": "./build/adapters/zustand.js"
 		},
+		"./zod": {
+			"types": "./build/adapters/zod.d.ts",
+			"default": "./build/adapters/zod.js"
+		},
 		"./package.json": "./package.json",
 		"./feature-kit": {
 			"types": "./build/adapters/feature-kit.d.ts",
