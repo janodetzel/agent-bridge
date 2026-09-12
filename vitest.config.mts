@@ -13,7 +13,12 @@ export default defineConfig({
 		// inlined for a different reason: externalized, it loads its own copy of
 		// graphql through Node, and graphql refuses to work across two instances.
 		server: { deps: { inline: [/@react-navigation\//, /@apollo\/client/, /^graphql/] } },
-		include: ["packages/*/test/**/*.test.ts", "apps/*/test/**/*.test.ts"],
+		// A feature's tests sit next to it, so `src` is included as well as `test`.
+		include: [
+			"packages/*/test/**/*.test.ts",
+			"apps/*/test/**/*.test.ts",
+			"apps/*/src/**/*.test.ts",
+		],
 		environment: "node",
 	},
 });

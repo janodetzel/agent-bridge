@@ -52,7 +52,7 @@ export const navigationRef = createNavigationContainerRef<RootStackParamList>();
  */
 export const todos = createTodos({ apollo: apolloClient });
 export const settings = createSettings({ store: settingsStore });
-export const news = createNews({ apollo: apolloClient, dismissed: dismissedNewsStore });
+export const news = createNews({ apollo: apolloClient, store: dismissedNewsStore });
 
 const SETTINGS_KEY = "settings";
 const DISMISSED_NEWS_KEY = "news.dismissedIds";
