@@ -85,7 +85,7 @@ A guideline nobody can point to in a review is a preference. Each principle abov
 | 10        | dependency-cruiser forbids UI, state, and validation libraries in the core; a test drives `handleRequest` with a hand-built registry |
 | All       | A release bundle contains no trace of the command transport                                                                          |
 
-Principle 1 has no mechanical check, and that is worth admitting. Nothing can prove a button has a command equivalent. It stays a review habit, which means it is the principle most likely to erode. A line in the pull request template is the cheapest defense.
+Principle 1 has no mechanical check, and that is worth admitting. Nothing can prove a button has a command equivalent. It stays a review habit, which means it is the principle most likely to erode.
 
 ## What these principles do not claim
 

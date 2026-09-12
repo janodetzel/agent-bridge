@@ -45,6 +45,10 @@ web UI.
 `pnpm --filter example-app check:release-bundle` exports a production bundle and fails
 if the bridge appears in it.
 
+A change to a published package needs a changeset: run `pnpm changeset` and commit
+the file. Never edit a package `version` or push a release tag by hand; see
+"Releasing" in `README.md`.
+
 ## Rules the design depends on
 
 1. **Commands use the same instances as the UI.** Create the Zustand stores, the

@@ -147,6 +147,26 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm depcruise
 | `pnpm depcruise`                                 | The layer boundaries between core, adapters, packages, and features |
 | `pnpm --filter example-app check:release-bundle` | That no trace of the command transport reaches a release bundle     |
 
+## Releasing
+
+`@janodetzel/app-commands` and `@janodetzel/feature-kit` are published to GitHub
+Packages, and each has its own version. Never edit a `version` field or push a tag
+by hand; [Changesets](https://github.com/changesets/changesets) does both.
+
+1. In a pull request that changes a published package, run `pnpm changeset`. Pick the
+   packages and the bump (patch, minor, major) and write one line for the changelog.
+   Commit the file it adds to `.changeset/`. A change that ships nothing, like the
+   example app or the docs, needs none.
+2. When that pull request is merged, the [publish workflow](.github/workflows/publish.yml)
+   opens or updates a "Version Packages" pull request. It bumps the versions and
+   writes each package's `CHANGELOG.md`, and it collects every changeset merged
+   since the last release.
+3. Merge "Version Packages" when you want to release. The workflow publishes every
+   package whose new version is not in the registry yet, then pushes a tag such as
+   `@janodetzel/feature-kit@0.2.0` and creates a GitHub release for it.
+
+Run `pnpm changeset status` to see what the next release would bump.
+
 ## Further reading
 
 - [`docs/principles.md`](docs/principles.md) explains each principle and what it does not claim.
