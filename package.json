@@ -15,6 +15,7 @@
 		"app-commands-mcp": "app-commands-mcp"
 	},
 	"devDependencies": {
+		"@changesets/cli": "^2.31.1",
 		"@eslint/js": "^10.0.1",
 		"@janodetzel/app-commands": "workspace:*",
 		"@janodetzel/feature-kit": "workspace:*",

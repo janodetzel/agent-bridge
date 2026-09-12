@@ -1,12 +1,22 @@
 name: Publish packages
 
+# On every push to main, changesets/action does one of two things:
+# - pending changesets: open or update the "Version Packages" pull request, which
+#   bumps versions and writes changelogs;
+# - no pending changesets (that pull request was just merged): publish every
+#   package whose version is not in the registry yet, then tag and release it.
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
   packages: write
 
 jobs:
@@ -31,9 +41,12 @@ jobs:
 
       - run: pnpm typecheck && pnpm lint && pnpm test && pnpm depcruise
 
-      # Explicit filters: packages/app-commands/webui is a workspace package too.
-      # pnpm rewrites workspace:* and skips a version that is already published,
-      # so a re-run publishes only the packages whose version was bumped.
-      - run: pnpm --filter @janodetzel/feature-kit --filter @janodetzel/app-commands publish --no-git-checks
+      # Pinned to v1: changesets/action v2 requires @changesets/cli v3, which needs pnpm 10.
+      - uses: changesets/action@v1.9.0
+        with:
+          publish: pnpm changeset publish
+          title: Version Packages
+          commit: Version Packages
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
