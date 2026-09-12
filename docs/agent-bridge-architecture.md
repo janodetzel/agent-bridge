@@ -52,7 +52,7 @@ The repo is a pnpm workspace with one package and one app.
 packages/
 	agent-bridge/    The dev tools plugin: core protocol, app hook, adapters, CLI, web console.
 apps/
-	mobile/
+	example-app/
 		src/
 			app/         App.tsx, instances.ts, agent.ts, api.ts
 			features/
@@ -305,7 +305,7 @@ Conventions decay. These are the checks that hold the rules up, and each one exi
 | `@typescript-eslint/no-floating-promises`, workspace-wide                                                      | Rule 3                                                                        |
 | A type test on `RouteName` against `RootStackParamList`                                                        | The runtime enum and the navigator cannot drift                               |
 | `test/production-bundle.test.ts`                                                                               | The package entry point stays a no-op in production                           |
-| `pnpm --filter mobile check:release-bundle`                                                                    | The app ships neither the bridge nor its command descriptions                 |
+| `pnpm --filter example-app check:release-bundle`                                                                | The app ships neither the bridge nor its command descriptions                 |
 | `buildRegistry` throwing on a duplicate key, exercised in tests                                                | Two groups cannot shadow each other                                           |
 
 Two notes on the lint rule. It matches three file names, so a `helpers.ts` in a feature folder slips through: put logic a command needs in one of the three, or widen the pattern. And when you change a dependency-cruiser rule, plant a violation and watch it fail before trusting a green run - the rules match resolved paths under `node_modules`, and an earlier version of them silently matched nothing.
@@ -318,7 +318,7 @@ Commands are testable without a simulator, because `handleRequest` takes only a 
 - Build an `ApolloClient` against the app's stand-in schema, or with `MockLink`. The operation functions need no `MockedProvider`, because they have no React imports.
 - Build a registry from these instances and call `handleRequest` directly.
 
-`apps/mobile/test/commands.test.ts` does exactly this: it adds a todo and then compares `todos.list` from cache and from the server, which catches a broken `update` before the agent does, and it asserts that a failing save rolls the store back and fails the command.
+`apps/example-app/test/commands.test.ts` does exactly this: it adds a todo and then compares `todos.list` from cache and from the server, which catches a broken `update` before the agent does, and it asserts that a failing save rolls the store back and fails the command.
 
 ## Decisions and trade-offs
 

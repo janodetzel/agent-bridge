@@ -11,7 +11,7 @@ verify here is what a user gets.
 
 ## Before the first call
 
-1. Metro and a simulator must be running: `pnpm --filter mobile start`, then press
+1. Metro and a simulator must be running: `pnpm --filter example-app start`, then press
    `i` for iOS or `a` for Android. Exit code 2 means nothing is connected.
 2. On an Android emulator, run `adb reverse tcp:8081 tcp:8081` once.
 3. After changing app code, reload the app (press `r` in Metro) before running

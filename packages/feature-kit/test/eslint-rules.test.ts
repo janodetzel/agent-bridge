@@ -16,7 +16,7 @@ const tester = new RuleTester({
 	languageOptions: { ecmaVersion: 2022, sourceType: "module" },
 });
 
-const APP = "/repo/apps/mobile/src";
+const APP = "/repo/apps/example-app/src";
 const logic = (feature: string, file: string) => `${APP}/features/${feature}/${file}`;
 
 const run = (name: keyof typeof plugin.rules, tests: Parameters<RuleTester["run"]>[2]) =>

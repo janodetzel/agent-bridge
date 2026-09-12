@@ -20,7 +20,7 @@ packages/
 	feature-kit/   An architecture pattern: defineFeature, and the lint rules that
 	               keep features callable from outside React.
 apps/
-	mobile/        A todo list built on both.
+	example-app/   A todo list built on both.
 ```
 
 The two packages are separable on purpose. `agent-bridge/src/core` imports nothing
@@ -29,7 +29,7 @@ service classes; `feature-kit` never imports `agent-bridge`, so the pattern is
 usable without it. `agent-bridge/feature-kit` is the adapter that joins them, and
 it is one of four — the others bind Apollo, React Navigation and Zustand.
 
-`apps/mobile` is deliberately small. Logic and UI sit together in a feature folder,
+`apps/example-app` is deliberately small. Logic and UI sit together in a feature folder,
 and one file creates every instance:
 
 ```
@@ -56,8 +56,8 @@ src/
 | `pnpm typecheck`                            | Runs `tsc --noEmit` in every package         |
 | `pnpm lint`                                 | ESLint over the workspace                    |
 | `pnpm depcruise`                            | Enforces the layer rules                     |
-| `pnpm --filter mobile start`                | Starts Metro and the app                     |
-| `pnpm --filter mobile check:release-bundle` | Fails if the bridge reaches a release bundle |
+| `pnpm --filter example-app start`                | Starts Metro and the app                     |
+| `pnpm --filter example-app check:release-bundle` | Fails if the bridge reaches a release bundle |
 
 ## Driving the app
 

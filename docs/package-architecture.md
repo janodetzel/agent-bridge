@@ -28,7 +28,7 @@ All five are verified: the smoke test ran against both an iOS simulator and an A
 
 - The package stays a workspace package. It is not published.
 - Commands run only inside the app. There is no headless runtime.
-- Business commands belong to the app team. The package ships the adapters and the sample todo and settings groups in `apps/mobile`.
+- Business commands belong to the app team. The package ships the adapters and the sample todo and settings groups in `apps/example-app`.
 - No adapter turns store actions into commands automatically.
 - Expo SDK 53 or later; developed and tested against 57.
 
@@ -271,7 +271,7 @@ The wrapper installs a `resolveRequest` that replaces the package's own groups m
 
 An app that skips the wrapper gets the empty fallback and a development-only warning saying so, rather than silence. An app that would rather not touch its Metro config can keep the guard in its own source instead: `const agentGroups = __DEV__ ? require("./agent").agentGroups : []`. Both work for the same reason, and a lazy require in either place does not: the dependency edge is created by the specifier, not by the call.
 
-`test/production-bundle.test.ts` checks the package entry point with esbuild, `test/metro.test.ts` checks the resolver in both directions, and `pnpm --filter mobile check:release-bundle` checks a real export of the app for both platforms.
+`test/production-bundle.test.ts` checks the package entry point with esbuild, `test/metro.test.ts` checks the resolver in both directions, and `pnpm --filter example-app check:release-bundle` checks a real export of the app for both platforms.
 
 Keep the strings that check greps for out of user-facing copy, or it turns into noise people learn to ignore.
 

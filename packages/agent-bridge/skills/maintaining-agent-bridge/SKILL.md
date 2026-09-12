@@ -131,7 +131,7 @@ the hook and the handler. Written any other way - a plain import, a thunk, a get
 it ships: the dependency edge comes from the specifier, not from the call.
 
 `test/production-bundle.test.ts` checks that with esbuild;
-`pnpm --filter mobile check:release-bundle` checks the whole app for both platforms.
+`pnpm --filter example-app check:release-bundle` checks the whole app for both platforms.
 Keep the strings that check greps for out of user-facing copy, or it turns into noise
 people learn to ignore.
 

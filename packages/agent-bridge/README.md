@@ -18,7 +18,7 @@ design and the layering this package depends on.
 The package stays a workspace package; it is not published.
 
 ```jsonc
-// apps/mobile/package.json
+// apps/example-app/package.json
 "dependencies": { "agent-bridge": "workspace:*" }
 ```
 
@@ -222,7 +222,7 @@ production behind a lazy `require`, and the bundler drops the branch - taking th
 hook, and with it the only thing that opens a connection to Metro.
 
 `test/production-bundle.test.ts` checks that with esbuild, and
-`pnpm --filter mobile check:release-bundle` checks the whole app for both platforms.
+`pnpm --filter example-app check:release-bundle` checks the whole app for both platforms.
 Keep the strings that check greps for out of user-facing copy, or it turns into
 noise people learn to ignore.
 

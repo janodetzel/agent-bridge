@@ -45,7 +45,7 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(@types/node@22.20.2)(vite@8.3.0)
 
-  apps/mobile:
+  apps/example-app:
     dependencies:
       '@apollo/client':
         specifier: ^4.3.0

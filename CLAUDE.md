@@ -7,7 +7,7 @@ A pnpm workspace holding two packages and a todo-list example app that uses both
   about how the app is built.
 - `packages/feature-kit` - an architecture pattern. `defineFeature`, and the ESLint
   plugin that enforces the principles. It never imports agent-bridge.
-- `apps/mobile` - the example, built on both.
+- `apps/example-app` - the example, built on both.
 
 `docs/architecture-principles-and-registry.md` is the source of truth. It supersedes
 parts of `docs/agent-bridge-architecture.md` and `docs/package-architecture.md`, and
@@ -39,7 +39,7 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm depcruise
 ```
 
 `pnpm --filter agent-bridge build:all` builds the plugin and exports the web UI.
-`pnpm --filter mobile check:release-bundle` exports a production bundle and fails
+`pnpm --filter example-app check:release-bundle` exports a production bundle and fails
 if the bridge appears in it.
 
 ## Rules the design depends on

@@ -1,6 +1,6 @@
 ---
 name: building-a-feature
-description: Add or change a feature in apps/mobile so an agent can drive it from the CLI. Use when adding a screen, a store, a GraphQL mutation, or an entry point, when wiring new state into the app, or when a feature exists but has no spec. Covers the folder shape, the four rules that keep commands honest, registration, and the tests to write.
+description: Add or change a feature so an agent can drive it from the CLI. Use when adding a screen, a store, a GraphQL mutation, or an entry point, when wiring new state into the app, or when a feature exists but has no spec. Covers the folder shape, the four rules that keep commands honest, registration, and the tests to write.
 ---
 
 # Building a feature
@@ -156,7 +156,7 @@ never a snapshot value, or the port goes stale.
 `handleRequest` needs only a registry, so commands are testable without a simulator:
 build the store with in-memory storage, build an `ApolloClient` against the stand-in
 schema in `src/app/api.ts`, wrap the feature with `featureCommands`, and call it the
-way the CLI does. See `apps/mobile/test/features.test.ts`.
+way the CLI does.
 
 Worth a test every time: cache and network agree after a mutation; a failing save
 rolls the store back and fails the command; an invalid argument is rejected.
