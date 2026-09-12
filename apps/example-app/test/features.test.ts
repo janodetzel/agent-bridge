@@ -66,8 +66,10 @@ describe("the todos feature", () => {
 	it("registers its commands under its own namespace", () => {
 		expect(Object.keys(registry).sort()).toEqual([
 			"todos.add",
+			"todos.addMany",
 			"todos.list",
 			"todos.remove",
+			"todos.removeAll",
 			"todos.setDone",
 		]);
 	});

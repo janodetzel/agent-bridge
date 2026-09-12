@@ -1,7 +1,7 @@
 import type { ApolloClient } from "@apollo/client";
 import { defineFeature } from "feature-kit";
 
-import { addTodo, getTodos, removeTodo, setTodoDone } from "./api";
+import { addTodo, addManyTodos, getTodos, removeTodo, removeAllTodos, setTodoDone } from "./api";
 import { todosSpec } from "./spec";
 
 export type TodosDeps = { apollo: ApolloClient };
@@ -22,12 +22,22 @@ export const createTodos = (deps: TodosDeps) =>
 			return getTodos(deps.apollo, "cache");
 		},
 
+		async addMany({ todos }) {
+			await addManyTodos(deps.apollo, todos);
+			return getTodos(deps.apollo, "cache");
+		},
+
 		async setDone({ id, done }) {
 			return setTodoDone(deps.apollo, id, done);
 		},
 
 		async remove({ id }) {
 			await removeTodo(deps.apollo, id);
+			return getTodos(deps.apollo, "cache");
+		},
+
+		async removeAll() {
+			await removeAllTodos(deps.apollo);
 			return getTodos(deps.apollo, "cache");
 		},
 	});

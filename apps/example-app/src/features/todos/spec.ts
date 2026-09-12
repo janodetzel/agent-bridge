@@ -22,6 +22,12 @@ export const todosSpec = {
 			"Adds a todo through the API, updates the cache the way the screen does, and returns the todos from the cache.",
 	},
 
+	addMany: {
+		args: z.object({ todos: z.array(z.object({ title: z.string().min(1) })) }),
+		description:
+			"Adds many todos through the API, updates the cache the way the screen does, and returns the todos from the cache.",
+	},
+
 	setDone: {
 		args: z.object({ id: z.string().min(1), done: z.boolean() }),
 		description:
@@ -32,5 +38,11 @@ export const todosSpec = {
 		args: z.object({ id: z.string().min(1) }),
 		description:
 			"Removes a todo, evicts it from the cache, and returns the todos that are left. Fails when the id does not exist.",
+	},
+
+	removeAll: {
+		args: z.object({}),
+		description:
+			"Removes all todos and clears the cache.",
 	},
 } satisfies Spec;

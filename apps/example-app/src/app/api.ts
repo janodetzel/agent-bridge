@@ -24,8 +24,10 @@ const schema = buildSchema(`
 	}
 	type Mutation {
 		addTodo(title: String!): Todo!
+		addTodos(titles: [String!]!): [Todo!]!
 		setTodoDone(id: ID!, done: Boolean!): Todo!
 		removeTodo(id: ID!): ID!
+		removeAllTodos: [ID!]!
 	}
 `);
 
@@ -77,6 +79,14 @@ const root = {
 		return { ...row };
 	},
 
+	addTodos: ({ titles }: { titles: string[] }) => {
+		return titles.map((title) => {
+			const row = { id: String(nextId++), title, done: false };
+			rows.push(row);
+			return { ...row };
+		});
+	},
+
 	setTodoDone: ({ id, done }: { id: string; done: boolean }) => {
 		const row = find(id);
 		row.done = done;
@@ -86,6 +96,12 @@ const root = {
 	removeTodo: ({ id }: { id: string }) => {
 		rows.splice(rows.indexOf(find(id)), 1);
 		return id;
+	},
+
+	removeAllTodos: () => {
+		const ids = rows.map((row) => row.id);
+		rows.length = 0;
+		return ids;
 	},
 };
 
