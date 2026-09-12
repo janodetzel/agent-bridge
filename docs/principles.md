@@ -6,12 +6,6 @@ These principles describe how to build such an app. They are constraints, not a 
 
 The packages exist to make the constraints cheap to follow and expensive to break:
 
-| Package                         | Role                                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------------------ |
-| `@janodetzel/feature-kit`       | Conventions for defining features once: `defineFeature`, `collectCommands`, adapters |
-| `@janodetzel/app-commands`      | The command contract, request handling, protocol, CLI. Knows no UI framework         |
-| `@janodetzel/app-commands/expo` | The Expo dev tools transport into a running app                                      |
-
 ## 1. The user interface is a client, not the application
 
 A screen is one way to reach a capability. A command is another. Neither owns the behavior.
