@@ -1,6 +1,4 @@
-import { z } from "zod";
-
-import type { Command, Registry } from "./command";
+import { lookup, type Registry } from "./command";
 import {
 	PROTOCOL_VERSION,
 	type CommandInfo,
@@ -21,6 +19,8 @@ const TIMED_OUT = Symbol("timed out");
 /**
  * Answers one request against a registry. It knows nothing about the transport,
  * so the app hook, the tests, and the fake app peer all share this code path.
+ * It knows nothing about features or validation libraries either: it calls
+ * `parse`, then `run`, then serializes.
  */
 export async function handleRequest(
 	registry: Registry,
@@ -49,19 +49,26 @@ export async function handleRequest(
 		return fail(envelope, "UNKNOWN_COMMAND", `unknown request "${(req as { cmd: string }).cmd}"`);
 	}
 
-	const cmd = registry.get(req.command);
+	const cmd = lookup(registry, req.command);
 	if (!cmd) {
 		return fail(envelope, "UNKNOWN_COMMAND", `unknown command "${req.command}"`);
 	}
 
-	const parsed = cmd.args.safeParse(req.args ?? {});
-	if (!parsed.success) {
+	let parsed;
+	try {
+		parsed = cmd.parse(req.args ?? {});
+	} catch (e) {
+		// `parse` belongs to whoever built the command. A throwing one is a bug
+		// there, and saying so beats reporting it as a transport failure.
 		return fail(
 			envelope,
-			"INVALID_ARGS",
-			`invalid arguments for "${req.command}"`,
-			parsed.error.issues,
+			"COMMAND_FAILED",
+			`the parse function for "${req.command}" threw: ${errorMessage(e)}`,
 		);
+	}
+
+	if (!parsed.ok) {
+		return fail(envelope, "INVALID_ARGS", `invalid arguments for "${req.command}"`, parsed.issues);
 	}
 
 	const timeoutMs = req.timeoutMs ?? opts.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -69,7 +76,7 @@ export async function handleRequest(
 
 	let outcome: unknown;
 	try {
-		outcome = await withTimeout(cmd.run(parsed.data), timeoutMs);
+		outcome = await withTimeout(cmd.run(parsed.value), timeoutMs);
 	} catch (e) {
 		return fail(envelope, "COMMAND_FAILED", errorMessage(e));
 	}
@@ -93,16 +100,9 @@ export async function handleRequest(
 }
 
 function describe(registry: Registry): CommandInfo[] {
-	return [...registry.entries()]
-		.map(([name, cmd]) => ({ name, description: cmd.description, args: argsSchema(cmd) }))
+	return Object.entries(registry)
+		.map(([name, cmd]) => ({ name, description: cmd.description, args: cmd.jsonSchema }))
 		.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-}
-
-function argsSchema(cmd: Command): object {
-	// `io: "input"` keeps arguments with a `.default()` optional, which is what a
-	// caller sends. `unrepresentable: "any"` keeps one exotic argument type from
-	// taking down the whole listing.
-	return z.toJSONSchema(cmd.args, { io: "input", unrepresentable: "any" });
 }
 
 /**

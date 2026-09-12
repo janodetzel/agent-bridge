@@ -1,14 +1,21 @@
 # agent-bridge
 
-A pnpm workspace holding an Expo dev tools plugin (`packages/agent-bridge`) and a
-todo-list example app that uses it (`apps/mobile`). `docs/agent-bridge-architecture.md`
-and `docs/package-architecture.md` are the source of truth for the design; read them
-before changing a layer boundary or the protocol.
+A pnpm workspace holding two packages and a todo-list example app that uses both:
+
+- `packages/agent-bridge` - an Expo dev tools plugin. Transport, protocol, CLI, MCP
+  server, web UI, and the adapters. It knows four things per command and nothing
+  about how the app is built.
+- `packages/feature-kit` - an architecture pattern. `defineFeature`, and the ESLint
+  plugin that enforces the principles. It never imports agent-bridge.
+- `apps/mobile` - the example, built on both.
+
+`docs/architecture-principles-and-registry.md` is the source of truth. It supersedes
+parts of `docs/agent-bridge-architecture.md` and `docs/package-architecture.md`, and
+says which parts. Read it before changing a layer boundary or the protocol.
 
 The example app keeps logic and UI together in `src/features/<feature>/`, and
-`src/app/instances.ts` is the only file that creates instances. The architecture doc
-names the larger split - a provider, and features in their own package - as the next
-step if this grows into a product, not the shape it has now.
+`src/app/instances.ts` is the only file that creates instances and wires features
+to each other.
 
 ## Skills
 
@@ -19,7 +26,7 @@ Code skills through `.claude/skills`:
 | -------------------------- | ---------------------------------------------------------------- |
 | `driving-the-app`          | Verifying behavior at runtime with `pnpm agent-bridge`           |
 | `workspace-setup`          | Installing, building, running the app, debugging the environment |
-| `building-a-feature`       | Adding a screen, a store, a mutation, or a command               |
+| `building-a-feature`       | Adding a screen, a store, a mutation, or an entry point          |
 | `state-architecture`       | Deciding how a feature holds state                               |
 | `maintaining-agent-bridge` | Changing the plugin: protocol, CLI, adapters, wire format        |
 
@@ -40,37 +47,51 @@ if the bridge appears in it.
 1. **Commands use the same instances as the UI.** Create the Zustand stores, the
    `ApolloClient`, and the `navigationRef` as module singletons outside React. A
    client created inside a component with `useMemo` is unreachable for the bridge.
-2. **Commands call the same functions as the UI.** A command validates its
-   arguments, calls a store action or an operation function, and returns the
-   result. It holds no business logic of its own.
-3. **Every async action returns a promise that settles when the work is done.** A
+2. **Commands call the same functions as the UI.** A command is never a second
+   implementation. The feature method _is_ the command: the screen calls
+   `todos.add({ title })` and so does the bridge.
+3. **Every entry point returns a promise that settles when the work is done.** A
    fire-and-forget call makes a command report success before the save runs.
    `@typescript-eslint/no-floating-promises` is an error across the workspace.
 
 ## Layer boundaries
 
-- `packages/agent-bridge/src/core` imports no UI or state library. It runs in the
-  app, in the CLI, and in tests.
-- `packages/agent-bridge/src/adapters/<lib>` imports only `<lib>` and core.
+This is the design's load-bearing wall. `pnpm depcruise` enforces it; when a rule
+blocks you, move the code, do not widen the rule.
 
-`pnpm depcruise` enforces both. When a rule blocks you, move the code, do not widen
-the rule.
+- `packages/agent-bridge/src/core` imports **nothing** - not zod, not a UI library,
+  not feature-kit. It knows `Command` and `Registry` and how to answer a request.
+- `packages/agent-bridge/src/adapters/<lib>` imports only `<lib>`, zod, and core.
+  zod is shared because core has no validation library, so every adapter describes
+  its arguments in zod and converts them in `adapters/zod.ts`.
+- `packages/feature-kit` never imports `agent-bridge`. The dependency runs the other
+  way: `agent-bridge/src/adapters/feature-kit` adapts it, like Apollo. depcruise
+  catches a relative import; an import by package name is banned by ESLint, because
+  it resolves into `build/`, which depcruise excludes.
 
-In the app, the same idea is a lint rule on file names: `src/features/*/api.ts`,
-`store.ts`, and `commands.ts` may not import React, React Native, Expo, or React
-Navigation, because a command has to be able to call them from outside React. The
-rule matches those three names only, so a `helpers.ts` in a feature folder slips
-through. Put logic a command needs in one of the three, or widen the pattern.
+In the app the boundaries are feature-kit's ESLint rules, matching on file names and
+resolved paths: `no-ui-in-logic`, `no-cross-feature-import`, `no-set-outside-store`,
+`no-ambient-io`, `require-rethrow`. A _logic file_ is `api.ts`, `store.ts`, `spec.ts`
+or `index.ts` directly inside a feature folder. The match is by name, so a
+`helpers.ts` slips through: put logic a command needs in one of the four, or widen
+`logicFiles` in the rule's options.
 
 ## Conventions
 
-- Screens and commands import their instances from `src/app/instances.ts`. A client
-  or a store created inside a component is unreachable for a command.
+- A feature is `spec.ts` (names, schemas, descriptions) plus `index.ts` (a
+  `createX(deps)` factory calling `defineFeature(...).create(handlers)`). The
+  handler signatures come from the spec, so the two cannot drift.
+- Descriptions are part of the API, not documentation. Say what the command does
+  _not_ do. Never generate one from a method name.
+- Screens and the registry import their instances from `src/app/instances.ts`, which
+  creates the stores and the features and wires them. A feature never imports another
+  feature; pass a getter or a delegate there instead, never a snapshot.
 - A store is a factory that takes its dependencies: `createSettingsStore({ storage })`.
   That is all that is left of dependency injection, and it is what lets a test pass
   in-memory storage.
 - Only a `store.ts` file calls `set`. An optimistic update rolls back and rethrows
-  on failure; the rethrow is what makes the command fail.
+  on failure; the rethrow is what makes the command fail, and `require-rethrow`
+  checks it.
 - A mutation goes through the operation function in `api.ts`, which owns its cache
   update. `useMutation` with its own `update` puts that logic where a command cannot
   reach it. Reads stay with `useQuery`.
@@ -78,17 +99,19 @@ through. Put logic a command needs in one of the three, or widen the pattern.
   `Date.now`, so a command and a test see the same time.
 - A command returns picked fields, not a whole store state: the state object carries
   its actions, and functions do not survive JSON.
-- `useAgentBridge()` takes no groups. `metro.config.js` wraps its config with
-  `withAgentBridge`, which swaps the package's empty groups module for
-  `src/app/agent.ts` in a development bundle; a release bundle keeps the empty one.
-  The hook is a no-op in production too, but without that swap the commands and their
-  descriptions would still ship. Deferring the import at runtime does not work: the
-  dependency edge is created by the import, not by the call.
+- `src/app/commands.ts` is the only place the two layers meet: `buildRegistry` merges
+  the slices that `featureCommands`, `apolloCommands` and `navigationCommands`
+  return. Build it at module scope.
+- `App.tsx` calls `useAgentBridge(commandRegistry)`. No Metro config and no special
+  import path. `agent-bridge` is a no-op in production, which drops the hook and
+  with it the only thing that connects the app to Metro. The schemas, the
+  descriptions and `handleRequest` do ship, unreachable, so it is bundle size rather
+  than exposure. Do not write a secret into a command description.
 - Keep the strings the release check greps for out of user-facing copy, or the check
   turns into noise people learn to ignore.
-- New feature with business logic? Add a command for it in the feature's
-  `commands.ts`. If features ship without commands, the agent loses its reach one
-  feature at a time.
+- New feature with business logic? It gets a `spec.ts`, so it is reachable by
+  definition. If features ship without one, the agent loses its reach one feature
+  at a time.
 - A screen cannot be handed a different store in a test, because there is no
   provider. Mock `../app/instances` when you need that.
 
@@ -105,8 +128,8 @@ The running app exposes its business logic through `pnpm agent-bridge`.
    the cache and hides the bug from every later `cache` read.
 5. Use `nav.navigate` to put the app on a screen for a UI check. Do not verify data
    with screenshots. Use the data commands.
-6. When you add a feature with business logic, add a command for it in the
-   feature's `commands.ts`.
+6. When you add a feature with business logic, declare its entry points in the
+   feature's `spec.ts`.
 7. Every store action and operation function must return a promise that resolves
    when the work is done. Never fire and forget.
 

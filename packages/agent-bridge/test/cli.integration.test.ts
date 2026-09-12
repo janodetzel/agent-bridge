@@ -3,10 +3,9 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import { AgentBridgeClient } from "../cli/client";
-import { buildRegistry, command, defineCommands } from "../src/core/command";
+import type { Registry } from "../src/core/command";
 import {
 	startFakeApp,
 	startFakeBroadcaster,
@@ -17,22 +16,31 @@ import {
 const execFileAsync = promisify(execFile);
 const BINARY = path.join(__dirname, "..", "build", "cli", "index.js");
 
-const registry = buildRegistry([
-	defineCommands("demo", {
-		echo: command({
-			description: "Returns its arguments.",
-			args: z.object({ value: z.string().min(1) }),
-			run: async (args) => args,
-		}),
-		fail: command({
-			description: "Always throws.",
-			args: z.object({}),
-			run: async () => {
-				throw new Error("demo.fail always throws");
-			},
-		}),
-	}),
-]);
+const registry: Registry = {
+	"demo.echo": {
+		description: "Returns its arguments.",
+		jsonSchema: {
+			type: "object",
+			properties: { value: { type: "string", minLength: 1 } },
+			required: ["value"],
+		},
+		parse: (input) => {
+			const value = (input as { value?: unknown })?.value;
+			return typeof value === "string" && value.length > 0
+				? { ok: true, value: { value } }
+				: { ok: false, issues: [{ path: ["value"], message: "expected a non-empty string" }] };
+		},
+		run: async (args) => args,
+	},
+	"demo.fail": {
+		description: "Always throws.",
+		jsonSchema: { type: "object", properties: {} },
+		parse: (input) => ({ ok: true, value: input }),
+		run: async () => {
+			throw new Error("demo.fail always throws");
+		},
+	},
+};
 
 let broadcaster: FakeBroadcaster;
 let app: FakeApp | undefined;

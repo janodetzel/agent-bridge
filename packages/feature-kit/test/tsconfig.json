@@ -4,7 +4,8 @@
 		"noEmit": true,
 		"types": ["node"],
 		"allowJs": true,
-		"checkJs": false
+		"module": "preserve",
+		"moduleResolution": "bundler"
 	},
-	"include": ["."]
+	"include": [".", "../src"]
 }

@@ -1,5 +1,14 @@
 # About the agent-bridge architecture
 
+> **Partly superseded.** `architecture-principles-and-registry.md` replaces the
+> sections on command definition and the registry: there are no command groups and
+> no `defineCommands`, features declare a spec and the bridge adapts them, and
+> `Command` no longer carries a Zod schema. There is also no Metro plugin: the app
+> builds a registry and passes it to `useAgentBridge`, and the commands ship to a
+> release bundle as inert data, which the production no-op has nothing to answer
+> with. The app architecture, the Apollo and navigation patterns, and the CI rules
+> below still hold. Read that document first.
+
 This document describes an Expo app whose business logic an AI agent can drive through a CLI. The agent calls commands such as `todos.add`, `settings.setUnits`, and `nav.navigate` against the app running in a simulator. Each command runs the same code, on the same instances, as a tap in the UI.
 
 The app uses three state holders:

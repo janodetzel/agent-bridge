@@ -1,5 +1,15 @@
 # The agent-bridge package
 
+> **Partly superseded.** `architecture-principles-and-registry.md` replaces the
+> `CommandGroup` type, `defineCommands`, `buildRegistry`, and the `Command` type,
+> and it moves the feature conventions into `packages/feature-kit`. The adapters
+> stayed here. The wire protocol, the CLI behavior, the error codes, and the task
+> order below still hold; `handleRequest` now calls `Command.parse` instead of
+> parsing a Zod schema itself. The Metro plugin task is gone, along with
+> `withAgentBridge` and `agent-bridge/metro`: the app passes its registry to
+> `useAgentBridge`, and keeping the commands themselves out of a release bundle is
+> no longer a goal. Read that document first.
+
 `packages/agent-bridge` is an Expo dev tools plugin that lets an agent run typed commands against a React Native app in a simulator, from a terminal, from a web console, or through MCP. This document describes the package as built. `docs/agent-bridge-architecture.md` describes the app architecture it serves and the three rules the whole design depends on; this one does not repeat them.
 
 This file started as a scaffolding brief written before the package existed. What the brief got wrong is recorded at the end, because those are the parts most likely to trip up the next person.

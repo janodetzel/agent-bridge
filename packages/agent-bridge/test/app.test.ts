@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { z } from "zod";
 
 import { attachAgentBridge, type BridgeClient } from "../src/app/attach";
-import { buildRegistry, command, defineCommands } from "../src/core/command";
+import type { Registry } from "../src/core/command";
 import { PROTOCOL_VERSION, type Request, type Response } from "../src/core/protocol";
 
 function fakeClient() {
@@ -39,15 +38,14 @@ function fakeClient() {
 	};
 }
 
-const registry = buildRegistry([
-	defineCommands("demo", {
-		echo: command({
-			description: "Returns its arguments.",
-			args: z.object({ hello: z.string() }),
-			run: async (args) => args,
-		}),
-	}),
-]);
+const registry: Registry = {
+	"demo.echo": {
+		description: "Returns its arguments.",
+		jsonSchema: { type: "object", properties: { hello: { type: "string" } }, required: ["hello"] },
+		parse: (input) => ({ ok: true, value: input }),
+		run: async (args) => args,
+	},
+};
 
 const runRequest = (id: string, clientId: string): Request => ({
 	id,

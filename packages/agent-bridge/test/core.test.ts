@@ -1,15 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
-import { buildRegistry, command, defineCommands, type CommandGroup } from "../src/core/command";
+import { buildRegistry, lookup, type Command, type Registry } from "../src/core/command";
 import { handleRequest } from "../src/core/handle";
 import { PROTOCOL_VERSION, type Request, type Response } from "../src/core/protocol";
 import { toJsonSafe } from "../src/core/serialize";
 
-const echo = command({
+/**
+ * Every registry here is built by hand: a literal JSON Schema and a plain
+ * `parse` function, with no zod and nothing from feature-kit.
+ *
+ * That is the point of the file. agent-bridge is supposed to know four things
+ * per command and nothing about where they came from, so if this test ever
+ * needs a validation library or the feature layer to express itself, the bridge
+ * has stopped being agnostic and the layering has leaked.
+ */
+
+const anything: Command["parse"] = (input) => ({ ok: true, value: input });
+
+/** A hand-rolled stand-in for `z.object({ value: z.string().min(1) })`. */
+const requiresValue: Command["parse"] = (input) => {
+	const value = (input as { value?: unknown })?.value;
+	return typeof value === "string" && value.length > 0
+		? { ok: true, value: { value } }
+		: { ok: false, issues: [{ path: ["value"], message: "expected a non-empty string" }] };
+};
+
+const command = (over: Partial<Command> = {}): Command => ({
 	description: "Returns its arguments.",
-	args: z.object({ value: z.string().min(1) }),
-	run: async ({ value }) => ({ value }),
+	jsonSchema: { type: "object", properties: {}, additionalProperties: true },
+	parse: anything,
+	run: async (args) => args,
+	...over,
+});
+
+const echo: Registry = {
+	"demo.echo": command({
+		jsonSchema: {
+			type: "object",
+			properties: { value: { type: "string", minLength: 1 } },
+			required: ["value"],
+		},
+		parse: requiresValue,
+	}),
+};
+
+const single = (name: string, over: Partial<Command>): Registry => ({
+	[`demo.${name}`]: command(over),
 });
 
 const request = (req: Partial<Request> & Pick<Request, "cmd">): Request =>
@@ -20,42 +56,46 @@ const request = (req: Partial<Request> & Pick<Request, "cmd">): Request =>
 		...req,
 	}) as Request;
 
-const run = (groups: CommandGroup[], req: Partial<Request> & Pick<Request, "cmd">) =>
-	handleRequest(buildRegistry(groups), request(req));
-
-const single = (name: string, cmd: ReturnType<typeof command>) =>
-	[defineCommands("demo", { [name]: cmd })] as CommandGroup[];
+const run = (registry: Registry, req: Partial<Request> & Pick<Request, "cmd">) =>
+	handleRequest(registry, request(req));
 
 const failed = (res: Response) => {
 	if (res.ok) throw new Error(`expected a failure, got ${JSON.stringify(res.result)}`);
 	return res;
 };
 
-describe("defineCommands", () => {
-	it("accepts a camelCase namespace", () => {
-		expect(defineCommands("myFeature", { echo }).namespace).toBe("myFeature");
-	});
-
-	it.each(["Demo", "my-feature", "my.feature", "1st", ""])("rejects %o", (namespace) => {
-		expect(() => defineCommands(namespace, { echo })).toThrow(/invalid namespace/);
-	});
-});
-
 describe("buildRegistry", () => {
-	it("keys commands by namespace and name", () => {
-		const registry = buildRegistry([defineCommands("demo", { echo })]);
-		expect([...registry.keys()]).toEqual(["demo.echo"]);
+	it("merges the slices the adapters return", () => {
+		const merged = buildRegistry(echo, single("other", {}));
+		expect(Object.keys(merged).sort()).toEqual(["demo.echo", "demo.other"]);
 	});
 
 	it("throws on a duplicate key and names it", () => {
-		const groups = [defineCommands("demo", { echo }), defineCommands("demo", { echo })];
-		expect(() => buildRegistry(groups)).toThrow('duplicate command "demo.echo"');
+		expect(() => buildRegistry(echo, echo)).toThrow('duplicate command "demo.echo"');
+	});
+
+	it("returns an empty registry for no slices", () => {
+		expect(buildRegistry()).toEqual({});
+	});
+});
+
+describe("lookup", () => {
+	it("finds a command", () => {
+		expect(lookup(echo, "demo.echo")).toBe(echo["demo.echo"]);
+	});
+
+	it("does not answer for an inherited property", () => {
+		// A plain object would hand back Object.prototype.toString here, and the
+		// handler would try to call it as a command.
+		expect(lookup(echo, "toString")).toBeUndefined();
+		expect(lookup(echo, "constructor")).toBeUndefined();
+		expect(lookup(echo, "__proto__")).toBeUndefined();
 	});
 });
 
 describe("handleRequest", () => {
 	it("copies id and clientId into the response", async () => {
-		const res = await handleRequest(buildRegistry(single("echo", echo)), {
+		const res = await handleRequest(echo, {
 			id: "abc",
 			clientId: "cli-7",
 			protocolVersion: PROTOCOL_VERSION,
@@ -68,19 +108,29 @@ describe("handleRequest", () => {
 	});
 
 	it("treats a missing args as an empty object", async () => {
-		const noArgs = command({
-			description: "Takes nothing.",
-			args: z.object({}),
-			run: async () => "done",
+		const registry = single("noArgs", { run: async () => "done" });
+		expect(await run(registry, { cmd: "run", command: "demo.noArgs" })).toMatchObject({
+			ok: true,
+			result: "done",
 		});
-		const res = await run(single("noArgs", noArgs), { cmd: "run", command: "demo.noArgs" });
-		expect(res).toMatchObject({ ok: true, result: "done" });
+	});
+
+	it("passes the parsed value to run, not the raw input", async () => {
+		// A parse that fills in a default is how `.default()` reaches a handler.
+		const registry = single("listed", {
+			parse: (input) => ({ ok: true, value: { source: "cache", ...(input as object) } }),
+			run: async (args) => args,
+		});
+		expect(await run(registry, { cmd: "run", command: "demo.listed", args: {} })).toMatchObject({
+			ok: true,
+			result: { source: "cache" },
+		});
 	});
 
 	describe("error codes", () => {
 		it("PROTOCOL_MISMATCH names both versions", async () => {
 			const res = failed(
-				await handleRequest(buildRegistry(single("echo", echo)), {
+				await handleRequest(echo, {
 					id: "1",
 					clientId: "c",
 					protocolVersion: PROTOCOL_VERSION + 1,
@@ -93,37 +143,45 @@ describe("handleRequest", () => {
 		});
 
 		it("UNKNOWN_COMMAND", async () => {
-			const res = failed(await run(single("echo", echo), { cmd: "run", command: "demo.nope" }));
+			const res = failed(await run(echo, { cmd: "run", command: "demo.nope" }));
 			expect(res.code).toBe("UNKNOWN_COMMAND");
 			expect(res.error).toContain("demo.nope");
 		});
 
-		it("INVALID_ARGS carries the Zod issues", async () => {
+		it("INVALID_ARGS carries the issues parse returned, untouched", async () => {
 			const res = failed(
-				await run(single("echo", echo), { cmd: "run", command: "demo.echo", args: { value: "" } }),
+				await run(echo, { cmd: "run", command: "demo.echo", args: { value: "" } }),
 			);
 			expect(res.code).toBe("INVALID_ARGS");
 			expect(res.issues?.[0]).toMatchObject({ path: ["value"] });
 		});
 
 		it("COMMAND_FAILED carries the error message", async () => {
-			const boom = command({
-				description: "Always throws.",
-				args: z.object({}),
+			const registry = single("fail", {
 				run: async () => {
 					throw new Error("nope");
 				},
 			});
-			const res = failed(await run(single("fail", boom), { cmd: "run", command: "demo.fail" }));
+			const res = failed(await run(registry, { cmd: "run", command: "demo.fail" }));
 			expect(res.code).toBe("COMMAND_FAILED");
 			expect(res.error).toBe("nope");
 		});
 
+		it("reports a throwing parse as the adapter's bug, not a transport failure", async () => {
+			const registry = single("bad", {
+				parse: () => {
+					throw new Error("schema is broken");
+				},
+			});
+			const res = failed(await run(registry, { cmd: "run", command: "demo.bad" }));
+			expect(res.code).toBe("COMMAND_FAILED");
+			expect(res.error).toContain("parse function");
+			expect(res.error).toContain("schema is broken");
+		});
+
 		it("TIMEOUT, without waiting for the command", async () => {
 			let settled = false;
-			const slow = command({
-				description: "Resolves long after the timeout.",
-				args: z.object({}),
+			const registry = single("slow", {
 				run: () =>
 					new Promise<string>((resolve) =>
 						setTimeout(() => {
@@ -133,9 +191,7 @@ describe("handleRequest", () => {
 					),
 			});
 			const started = Date.now();
-			const res = failed(
-				await run(single("slow", slow), { cmd: "run", command: "demo.slow", timeoutMs: 50 }),
-			);
+			const res = failed(await run(registry, { cmd: "run", command: "demo.slow", timeoutMs: 50 }));
 			expect(res.code).toBe("TIMEOUT");
 			expect(res.error).toContain("50 ms");
 			expect(Date.now() - started).toBeLessThan(1_000);
@@ -143,61 +199,54 @@ describe("handleRequest", () => {
 		});
 
 		it("NOT_SERIALIZABLE names the path of the first bad value", async () => {
-			const mapped = command({
-				description: "Returns a Map.",
-				args: z.object({}),
+			const registry = single("mapped", {
 				run: async () => ({ items: [{ id: 1 }, { id: 2, tags: new Map() }] }),
 			});
-			const res = failed(
-				await run(single("mapped", mapped), { cmd: "run", command: "demo.mapped" }),
-			);
+			const res = failed(await run(registry, { cmd: "run", command: "demo.mapped" }));
 			expect(res.code).toBe("NOT_SERIALIZABLE");
 			expect(res.error).toContain("result.items[1].tags");
 		});
 	});
 
 	it("returns a Date as an ISO string", async () => {
-		const dated = command({
-			description: "Returns a Date.",
-			args: z.object({}),
+		const registry = single("dated", {
 			run: async () => ({ at: new Date("2026-09-11T10:20:30.000Z") }),
 		});
-		const res = await run(single("dated", dated), { cmd: "run", command: "demo.dated" });
-		expect(res).toMatchObject({ ok: true, result: { at: "2026-09-11T10:20:30.000Z" } });
+		expect(await run(registry, { cmd: "run", command: "demo.dated" })).toMatchObject({
+			ok: true,
+			result: { at: "2026-09-11T10:20:30.000Z" },
+		});
 	});
 });
 
 describe("the commands request", () => {
-	const listed = command({
-		description: "Lists favorites.",
-		args: z.object({
-			source: z.enum(["cache", "network"]).default("cache"),
-			itemId: z.string().min(1),
-			limit: z.number().int().optional(),
-			verbose: z.boolean().default(false),
-		}),
-		run: async () => [],
-	});
+	it("describes every command, sorted by name, handing back the schema verbatim", async () => {
+		const favoritesSchema = {
+			type: "object",
+			properties: {
+				source: { enum: ["cache", "network"] },
+				itemId: { type: "string", minLength: 1 },
+			},
+			required: ["itemId"],
+		};
+		const registry = buildRegistry(echo, {
+			"favorites.list": command({ description: "Lists favorites.", jsonSchema: favoritesSchema }),
+		});
 
-	it("describes every command, sorted by name, with JSON Schema arguments", async () => {
-		const groups = [
-			defineCommands("favorites", { list: listed }),
-			defineCommands("demo", { echo }),
-		];
-		const res = await handleRequest(buildRegistry(groups), request({ cmd: "commands" }));
+		const res = await handleRequest(registry, request({ cmd: "commands" }));
 		if (!res.ok) throw new Error(res.error);
 
-		const infos = res.result as { name: string; description: string; args: Record<string, any> }[];
+		const infos = res.result as { name: string; description: string; args: object }[];
 		expect(infos.map((i) => i.name)).toEqual(["demo.echo", "favorites.list"]);
+		// The bridge does not interpret the schema, so it must not reshape it either:
+		// the CLI flags and the web UI form are built from exactly what the app sent.
+		expect(infos[1]!.args).toEqual(favoritesSchema);
+		expect(infos[1]!.description).toBe("Lists favorites.");
+	});
 
-		const schema = infos[1]!.args;
-		expect(schema.type).toBe("object");
-		expect(schema.properties.source).toMatchObject({ enum: ["cache", "network"] });
-		expect(schema.properties.itemId).toMatchObject({ type: "string", minLength: 1 });
-		expect(schema.properties.limit).toMatchObject({ type: "integer" });
-		expect(schema.properties.verbose).toMatchObject({ type: "boolean" });
-		// A default makes the argument optional for the caller.
-		expect(schema.required).toEqual(["itemId"]);
+	it("answers with an empty list for an empty registry", async () => {
+		const res = await handleRequest({}, request({ cmd: "commands" }));
+		expect(res).toMatchObject({ ok: true, result: [] });
 	});
 });
 

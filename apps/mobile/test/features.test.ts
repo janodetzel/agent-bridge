@@ -1,17 +1,19 @@
 import { ApolloClient, InMemoryCache } from "@apollo/client";
 import { buildRegistry, handleRequest, PROTOCOL_VERSION, type Registry } from "agent-bridge/core";
+import { featureCommands } from "agent-bridge/feature-kit";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { apiLink } from "../src/app/api";
-import { newsCommands } from "../src/features/news/commands";
+import { createNews } from "../src/features/news";
 import { createDismissedNewsStore } from "../src/features/news/store";
-import { settingsCommands } from "../src/features/settings/commands";
+import { createSettings } from "../src/features/settings";
 import { createSettingsStore, type SettingsState } from "../src/features/settings/store";
-import { todosCommands } from "../src/features/todos/commands";
+import { createTodos } from "../src/features/todos";
 
 /**
- * The commands are tested the way the CLI calls them, against the same functions
- * the screens call. No simulator and no React: `handleRequest` only needs a registry.
+ * The features are tested the way the CLI calls them, through the registry, and
+ * that is the same method the screens call. No simulator and no React:
+ * `handleRequest` only needs a registry.
  */
 
 const memoryStorage = () => {
@@ -20,6 +22,17 @@ const memoryStorage = () => {
 		get: async () => saved,
 		set: async (settings: SettingsState) => {
 			saved = settings;
+		},
+		read: () => saved,
+	};
+};
+
+const memoryDismissedStorage = () => {
+	let saved: string[] | null = null;
+	return {
+		get: async () => saved,
+		set: async (ids: string[]) => {
+			saved = ids;
 		},
 		read: () => saved,
 	};
@@ -41,13 +54,22 @@ const resultOf = async (registry: Registry, command: string, args?: unknown) => 
 	return response.result;
 };
 
-describe("todos commands", () => {
+describe("the todos feature", () => {
 	let registry: Registry;
 
 	beforeEach(() => {
 		// A fresh client, so each test starts with an empty cache.
 		const client = new ApolloClient({ link: apiLink, cache: new InMemoryCache() });
-		registry = buildRegistry([todosCommands(client)]);
+		registry = featureCommands(createTodos({ apollo: client }));
+	});
+
+	it("registers its commands under its own namespace", () => {
+		expect(Object.keys(registry).sort()).toEqual([
+			"todos.add",
+			"todos.list",
+			"todos.remove",
+			"todos.setDone",
+		]);
 	});
 
 	it("adds a todo and shows it in the cache the screen reads", async () => {
@@ -104,10 +126,10 @@ describe("todos commands", () => {
 	});
 });
 
-describe("settings commands", () => {
+describe("the settings feature", () => {
 	it("saves what it sets, and returns state without the actions", async () => {
 		const storage = memoryStorage();
-		const registry = buildRegistry([settingsCommands(createSettingsStore({ storage }))]);
+		const registry = featureCommands(createSettings({ store: createSettingsStore({ storage }) }));
 
 		expect(await resultOf(registry, "settings.setUnits", { units: "mi" })).toBe("mi");
 		expect(storage.read()).toEqual({ units: "mi", notifications: true });
@@ -126,7 +148,7 @@ describe("settings commands", () => {
 				},
 			},
 		});
-		const registry = buildRegistry([settingsCommands(store)]);
+		const registry = featureCommands(createSettings({ store }));
 
 		const response = await call(registry, "settings.setUnits", { units: "mi" });
 
@@ -145,27 +167,31 @@ describe("settings commands", () => {
 
 		expect(store.getState()).toMatchObject({ units: "mi", notifications: false });
 	});
+
+	it("is callable as plain methods, the way the screen calls it", async () => {
+		const storage = memoryStorage();
+		const store = createSettingsStore({ storage });
+		const settings = createSettings({ store });
+
+		// The screen does exactly this. There is no second implementation for it.
+		await settings.setNotifications({ notifications: false });
+
+		expect(store.getState().notifications).toBe(false);
+		expect(storage.read()).toEqual({ units: "km", notifications: false });
+	});
 });
 
-const memoryDismissedStorage = () => {
-	let saved: string[] | null = null;
-	return {
-		get: async () => saved,
-		set: async (ids: string[]) => {
-			saved = ids;
-		},
-		read: () => saved,
-	};
-};
-
-describe("news commands", () => {
+describe("the news feature", () => {
 	let registry: Registry;
 
 	beforeEach(() => {
 		const client = new ApolloClient({ link: apiLink, cache: new InMemoryCache() });
-		registry = buildRegistry([
-			newsCommands(client, createDismissedNewsStore({ storage: memoryDismissedStorage() })),
-		]);
+		registry = featureCommands(
+			createNews({
+				apollo: client,
+				dismissed: createDismissedNewsStore({ storage: memoryDismissedStorage() }),
+			}),
+		);
 	});
 
 	it("dismisses an article so it drops out of list", async () => {
@@ -185,7 +211,7 @@ describe("news commands", () => {
 		const storage = memoryDismissedStorage();
 		const client = new ApolloClient({ link: apiLink, cache: new InMemoryCache() });
 		const store = createDismissedNewsStore({ storage });
-		const commands = buildRegistry([newsCommands(client, store)]);
+		const commands = featureCommands(createNews({ apollo: client, dismissed: store }));
 
 		const before = (await resultOf(commands, "news.list", { source: "network" })) as {
 			id: string;
@@ -207,7 +233,7 @@ describe("news commands", () => {
 				},
 			},
 		});
-		const commands = buildRegistry([newsCommands(client, store)]);
+		const commands = featureCommands(createNews({ apollo: client, dismissed: store }));
 
 		const response = await call(commands, "news.dismiss", { id: "a1" });
 
@@ -218,5 +244,31 @@ describe("news commands", () => {
 	it("rejects an empty id before it reaches the store", async () => {
 		const response = await call(registry, "news.dismiss", { id: "" });
 		expect(response).toMatchObject({ ok: false, code: "INVALID_ARGS" });
+	});
+});
+
+describe("the registry the app builds", () => {
+	it("holds every feature's commands under a namespace of its own", async () => {
+		const client = new ApolloClient({ link: apiLink, cache: new InMemoryCache() });
+		const registry = buildRegistry(
+			featureCommands(
+				createTodos({ apollo: client }),
+				createNews({
+					apollo: client,
+					dismissed: createDismissedNewsStore({ storage: memoryDismissedStorage() }),
+				}),
+				createSettings({ store: createSettingsStore({ storage: memoryStorage() }) }),
+			),
+		);
+
+		const namespaces = new Set(Object.keys(registry).map((key) => key.split(".")[0]));
+		expect([...namespaces].sort()).toEqual(["news", "settings", "todos"]);
+
+		// Every command carries a description written for the agent, not a name
+		// turned into a sentence, and a schema the CLI can build flags from.
+		for (const [name, cmd] of Object.entries(registry)) {
+			expect(cmd.description.length, name).toBeGreaterThan(20);
+			expect(cmd.jsonSchema, name).toMatchObject({ type: "object" });
+		}
 	});
 });

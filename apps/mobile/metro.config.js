@@ -1,7 +1,6 @@
 // Metro has to see the workspace packages, and it must not walk out of the
 // workspace looking for a second copy of react.
 const { getDefaultConfig } = require("expo/metro-config");
-const { withAgentBridge } = require("agent-bridge/metro");
 const path = require("path");
 
 const projectRoot = __dirname;
@@ -16,6 +15,5 @@ config.resolver.nodeModulesPaths = [
 ];
 config.resolver.disableHierarchicalLookup = true;
 
-// `agent-bridge/groups` resolves to src/app/agent.ts in a development bundle and to
-// an empty module in a release bundle, so no command ships to users.
-module.exports = withAgentBridge(config, { groups: "./src/app/agent.ts" });
+// The bridge needs no Metro config of its own.
+module.exports = config;

@@ -3,10 +3,9 @@ import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import { buildTools } from "../mcp/tools";
-import { buildRegistry, command, defineCommands } from "../src/core/command";
+import type { Registry } from "../src/core/command";
 import type { CommandInfo } from "../src/core/protocol";
 import {
 	startFakeApp,
@@ -17,22 +16,31 @@ import {
 
 const BINARY = path.join(__dirname, "..", "build", "mcp", "index.js");
 
-const registry = buildRegistry([
-	defineCommands("demo", {
-		echo: command({
-			description: "Returns its arguments.",
-			args: z.object({ value: z.string().min(1) }),
-			run: async (args) => args,
-		}),
-		fail: command({
-			description: "Always throws.",
-			args: z.object({}),
-			run: async () => {
-				throw new Error("demo.fail always throws");
-			},
-		}),
-	}),
-]);
+const registry: Registry = {
+	"demo.echo": {
+		description: "Returns its arguments.",
+		jsonSchema: {
+			type: "object",
+			properties: { value: { type: "string", minLength: 1 } },
+			required: ["value"],
+		},
+		parse: (input) => {
+			const value = (input as { value?: unknown })?.value;
+			return typeof value === "string" && value.length > 0
+				? { ok: true, value: { value } }
+				: { ok: false, issues: [{ path: ["value"], message: "expected a non-empty string" }] };
+		},
+		run: async (args) => args,
+	},
+	"demo.fail": {
+		description: "Always throws.",
+		jsonSchema: { type: "object", properties: {} },
+		parse: (input) => ({ ok: true, value: input }),
+		run: async () => {
+			throw new Error("demo.fail always throws");
+		},
+	},
+};
 
 let broadcaster: FakeBroadcaster;
 let app: FakeApp | undefined;

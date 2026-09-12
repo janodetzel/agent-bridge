@@ -10,8 +10,7 @@ import {
 	View,
 } from "react-native";
 
-import { apolloClient } from "../../app/instances";
-import { addTodo, removeTodo, setTodoDone } from "./api";
+import { todos } from "../../app/instances";
 import { TODOS, type Todo } from "./gql";
 
 export function TodosScreen() {
@@ -19,12 +18,13 @@ export function TodosScreen() {
 	const [title, setTitle] = useState("");
 	const [busy, setBusy] = useState(false);
 
-	// The screen calls the same operation functions the commands call.
+	// The screen calls the feature method directly, and so does the bridge:
+	// `todos.add` is the command. No dispatch wrapper in between.
 	const submit = async () => {
 		if (!title.trim()) return;
 		setBusy(true);
 		try {
-			await addTodo(apolloClient, title.trim());
+			await todos.add({ title: title.trim() });
 			setTitle("");
 		} finally {
 			setBusy(false);
@@ -58,12 +58,12 @@ export function TodosScreen() {
 					<View style={styles.row}>
 						<Pressable
 							style={styles.check}
-							onPress={() => void setTodoDone(apolloClient, item.id, !item.done)}
+							onPress={() => void todos.setDone({ id: item.id, done: !item.done })}
 						>
 							<Text style={styles.checkMark}>{item.done ? "☑" : "☐"}</Text>
 							<Text style={[styles.title, item.done && styles.titleDone]}>{item.title}</Text>
 						</Pressable>
-						<Pressable onPress={() => void removeTodo(apolloClient, item.id)}>
+						<Pressable onPress={() => void todos.remove({ id: item.id })}>
 							<Text style={styles.remove}>Delete</Text>
 						</Pressable>
 					</View>

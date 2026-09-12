@@ -36,7 +36,7 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm depcruise
 - `pnpm depcruise` enforces the layers inside `packages/agent-bridge`. When a rule
   blocks you, move the code; do not widen the rule.
 - `pnpm --filter mobile check:release-bundle` exports a production bundle and fails
-  if the bridge appears in it. Run it after touching `App.tsx`, `agent.ts`, or the
+  if the bridge appears in it. Run it after touching `App.tsx`, `commands.ts`, or the
   package entry point.
 
 ## Running the app

@@ -21,6 +21,7 @@
 		"dependency-cruiser": "^18.2.0",
 		"esbuild": "^0.28.2",
 		"eslint": "^10.10.0",
+		"feature-kit": "workspace:*",
 		"globals": "^17.12.0",
 		"prettier": "^3.9.6",
 		"typescript": "~5.9.3",

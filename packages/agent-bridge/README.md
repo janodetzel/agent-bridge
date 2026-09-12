@@ -10,8 +10,8 @@ $ pnpm agent-bridge nav.navigate --screen Settings
 {"name":"Settings","params":null}
 ```
 
-`docs/agent-bridge-architecture.md` in the repo root explains the app architecture
-this package serves. `docs/package-architecture.md` is the brief it was built from.
+`docs/architecture-principles-and-registry.md` in the repo root holds the current
+design and the layering this package depends on.
 
 ## Installing it in the workspace
 
@@ -26,56 +26,82 @@ Add it to the root `package.json` as well, so `pnpm agent-bridge` works from the
 repo root: pnpm links a binary into the `node_modules/.bin` of the package that
 depends on it.
 
-`zod` (version 4) is a peer dependency, and so are `expo` and `react`. The three
-adapter libraries are optional peers: you only need the ones you use.
+`expo` and `react` are peer dependencies. Everything else is an optional peer -
+`zod`, `feature-kit`, and the three UI libraries - because each is needed only by
+the adapter that binds it. A registry built by hand needs none of them.
 
-## Defining a command
+## What the bridge knows about a command
 
-A command has a description written for the agent, a Zod schema for its arguments,
-and an async `run`. It holds no business logic of its own: it validates, calls the
-function the UI calls, and returns the result.
+Four things, and nothing about where they came from.
 
 ```ts
-import { command, defineCommands } from "agent-bridge/core";
-import { z } from "zod";
+type Command = {
+	description: string;
+	/** JSON Schema of the arguments, for the CLI flags and the web UI form. */
+	jsonSchema: object;
+	/** Returns parsed args or issues. agent-bridge never validates itself. */
+	parse: (input: unknown) => { ok: true; value: unknown } | { ok: false; issues: unknown[] };
+	run: (args: unknown) => Promise<unknown>;
+};
 
-export const todosCommands = (client: ApolloClient) =>
-	defineCommands("todos", {
-		list: command({
-			description:
-				"Returns the todos. source=cache is what the screen shows now, source=network is what the server has.",
-			args: z.object({ source: z.enum(["cache", "network"]).default("cache") }),
-			run: ({ source }) => getTodos(client, source),
-		}),
-	});
+type Registry = Record<string, Command>; // keys are `<namespace>.<name>`
 ```
 
-Write the description for the agent: what the command does, what it returns, and
-when it does nothing. It is all the agent gets.
+`src/core` imports nothing at all - no validation library, no UI library, no
+feature framework - so the bridge works against an app built on Redux, XState,
+MobX, or plain service classes. `parse` is a function rather than a schema object
+for the same reason: a Valibot or ArkType app is not forced to install zod, and
+one built on a Standard Schema `~standard.validate` is a few lines.
 
-The namespace is camelCase. `buildRegistry` keys every command as
-`<namespace>.<name>` and throws on a duplicate, naming it.
+`handleRequest` calls `parse`, then `run`, then serializes. It has no notion of a
+feature, a namespace, or a spec.
 
-## Registering the groups
+## Producing commands
 
-Point Metro at the module that exports them, and call the hook with nothing:
+An adapter turns one library into a slice of the registry. `buildRegistry` merges
+the slices and throws on a duplicate key, naming it.
 
-```js
-// metro.config.js
-const { withAgentBridge } = require("agent-bridge/metro");
-module.exports = withAgentBridge(getDefaultConfig(__dirname), { groups: "./src/app/agent.ts" });
+```ts
+import { buildRegistry } from "agent-bridge/core";
+import { featureCommands } from "agent-bridge/feature-kit";
+import { apolloCommands } from "agent-bridge/apollo";
+import { navigationCommands } from "agent-bridge/react-navigation";
+
+export const commandRegistry = buildRegistry(
+	featureCommands(todos, settings),
+	apolloCommands(apolloClient),
+	navigationCommands(navigationRef, { routes: RouteName }),
+);
 ```
+
+`featureCommands` is the adapter for [feature-kit](../feature-kit): it reads a
+feature's spec and emits one command per entry. Nothing is registered by hand.
+
+An app that uses neither can write the four fields itself. That is all the bridge
+needs, and `test/core.test.ts` does exactly that - if it ever needs zod or
+feature-kit to express itself, the layering has leaked.
+
+## Registering it
+
+Hand the registry to the hook, once, in the root component. There is no Metro
+config and no special import path:
 
 ```tsx
-// src/app/agent.ts
-export const agentGroups = [todosCommands(apolloClient), settingsCommands(settingsStore)];
+import { useAgentBridge } from "agent-bridge";
 
-// App.tsx
+import { commandRegistry } from "./commands";
+
 export default function App() {
-	useAgentBridge();
+	useAgentBridge(commandRegistry);
 	return; /* … */
 }
 ```
+
+Build the registry at module scope. One built inside a component is a new object on
+every render, which would re-subscribe the listener each frame.
+
+A second argument takes options: `defaultTimeoutMs` bounds a command that never
+settles, for a caller that sent no timeout of its own, and defaults to 10 seconds.
 
 ## Using the CLI
 
@@ -158,20 +184,25 @@ error code and the Zod issues.
 
 ## Adapters
 
-Each adapter turns one library into a command group. They are separate entry
-points, so an app pays only for what it imports.
+Each adapter turns one library into a slice of the registry, already namespaced.
+They are separate entry points, so an app pays only for what it imports.
 
 ```ts
+import { buildRegistry } from "agent-bridge/core";
+import { featureCommands } from "agent-bridge/feature-kit";
 import { navigationCommands } from "agent-bridge/react-navigation";
 import { apolloCommands } from "agent-bridge/apollo";
 import { zustandInspect } from "agent-bridge/zustand";
 
-export const groups = [
+buildRegistry(
+	featureCommands(todos, settings), //                         todos.add, settings.setUnits, …
 	navigationCommands(navigationRef, { routes: RouteName }), // nav.current, nav.navigate, nav.back
 	apolloCommands(apolloClient), //                             apollo.cache, apollo.refetch
 	zustandInspect({ settings: settingsStore }), //               store.get
-];
+);
 ```
+
+Each takes a `namespace` option for an app that already uses the default name.
 
 `nav.navigate` waits until the route is focused and fails when it is not, because
 React Navigation logs a warning for an unknown route rather than throwing. Types do
@@ -181,26 +212,28 @@ a type test against the navigator's param list.
 `apollo.cache` requires a prefix: a full dump of a real app's cache is megabytes of
 noise in an agent's context. `zustandInspect` is read-only on purpose — a command
 that called `setState` would put the app in a state no tap can produce. Expose the
-store action as a command in the feature instead.
+store action as a named entry point instead.
 
 ## Keeping the bridge out of release builds
 
-The bridge accepts any valid command from anything that can reach Metro. Two things
-keep it out of a release build:
+The bridge accepts any valid command from anything that can reach Metro, so nothing
+in a release build may be able to answer one. `agent-bridge` exports a no-op in
+production behind a lazy `require`, and the bundler drops the branch - taking the
+hook, and with it the only thing that opens a connection to Metro.
 
-1. `agent-bridge` exports a no-op in production, so the hook and the handler are
-   dropped by the bundler.
-2. The app's groups are dropped too. Wrap the Metro config with `withAgentBridge`
-   from `agent-bridge/metro` and import them from `agent-bridge/groups`, or keep a
-   `__DEV__` require in the app's own source. A plain import ships all of them, and
-   so does any runtime-deferred import: the dependency edge comes from the specifier,
-   not from the call.
+`test/production-bundle.test.ts` checks that with esbuild, and
+`pnpm --filter mobile check:release-bundle` checks the whole app for both platforms.
+Keep the strings that check greps for out of user-facing copy, or it turns into
+noise people learn to ignore.
 
-`pnpm --filter mobile check:release-bundle` proves it: it exports a production
-bundle and fails if the bridge appears in it. Run it for `ios` and `android`.
+Other parts of the bridge do reach a release bundle: the argument schemas, the
+descriptions, and `handleRequest`, which comes along when the app imports
+`buildRegistry`. None of it is reachable without the transport, so it is a question
+of bundle size rather than of exposure - but do not write a secret into a command
+description.
 
-Also keep Metro bound to localhost on a shared network, and do not point a dev
-build carrying the bridge at production data.
+Also keep Metro bound to localhost on a shared network, and do not point a dev build
+carrying the bridge at production data.
 
 ## Known limits
 

@@ -7,15 +7,23 @@ description: Work on the agent-bridge package itself - the core protocol, the ap
 
 ```
 packages/agent-bridge/
-	src/core/       protocol, command/registry, handleRequest, toJsonSafe - no UI library
+	src/core/       protocol, Command/Registry, handleRequest, toJsonSafe - imports NOTHING
 	src/app/        useAgentBridge, and the transport-agnostic attach()
-	src/adapters/   one file per library, each importing only that library and core
+	src/adapters/   one file per library, each importing only that library, zod, and core
 	src/index.ts    the production no-op
 	cli/            client, flags, entry point
 	cli/wire/       copied from Expo - see SOURCE.md
 	mcp/            the MCP server, over cli/client.ts
 	webui/          the command console
 ```
+
+`src/core` importing nothing is the rule the package exists to keep. A `Command` is
+a description, a JSON Schema, a `parse` function and a `run` function, so the bridge
+works against an app built on Redux, XState, MobX or plain service classes - and
+against Valibot or ArkType, because `parse` is a function rather than a schema
+object. zod lives in the adapter layer, where `adapters/zod.ts` is the single place
+a schema becomes `jsonSchema` + `parse`. `packages/feature-kit` is a separate package
+that never imports this one; `src/adapters/feature-kit.ts` adapts it, like Apollo.
 
 `pnpm depcruise` enforces the layers. The rules match resolved paths under
 `node_modules`, not dependency-cruiser's dependency types, because an import of a
@@ -32,16 +40,29 @@ message saying what to rebuild. Both halves are built from the same source, so a
 mismatch in practice means a stale build or a stale app - say so rather than adding
 compatibility shims.
 
-`handleRequest` takes a registry and a request and nothing else. Keep it that way:
-the app hook, the tests, and the fake app peer all share that one code path, which
-is why the tests are worth anything.
+`handleRequest` takes a registry and a request and nothing else. It calls `parse`,
+then `run`, then serializes; it has no notion of a feature, a namespace or a spec.
+Keep it that way: the app hook, the tests, and the fake app peer all share that one
+code path, which is why the tests are worth anything.
+
+`CommandInfo.args` is the wire name for a command's JSON Schema. The CLI, the MCP
+server and the web UI all read it and nothing else, so renaming it is a protocol
+change even though nothing in `src/` would fail to compile.
 
 ## Adding an adapter
 
-One factory returning a `CommandGroup`, in `src/adapters/<lib>.ts`, plus an entry in
-the `exports` map pointing at `./build/adapters/<lib>.js`. The library goes in
-`peerDependenciesMeta` as optional and in `devDependencies` for types. Tests build
-real instances and call through `handleRequest`; no React rendering.
+One factory returning a `Registry` slice with its keys already namespaced, in
+`src/adapters/<lib>.ts`, plus an entry in the `exports` map pointing at
+`./build/adapters/<lib>.js`. Build the slice with `zodCommands(namespace, {...})`
+from `adapters/zod.ts`: it infers a schema per entry and checks that entry's handler
+against it, so a handler destructuring a field its schema does not declare is a
+compile error.
+
+Take a `namespace` option, defaulting to something short, for an app that already
+uses the name. The library goes in `peerDependenciesMeta` as optional and in
+`devDependencies` for types, and in `.dependency-cruiser.cjs`'s `ADAPTER_LIBRARIES`
+so the new adapter may reach it and nothing else. Tests build real instances and call
+through `handleRequest`; no React rendering.
 
 Read-only by default. `zustandInspect` exposes no writer on purpose: a command that
 called `setState` would put the app in a state no tap can produce.
@@ -103,24 +124,31 @@ Never write the frame format or the handshake from memory.
 
 ## Keeping it out of release builds
 
-Two things do it, and both must hold:
+The bridge accepts any valid command from anything that can reach Metro, so nothing
+in a release build may be able to answer one. `src/index.ts` exports a no-op in
+production behind a lazy `require`, in a branch the bundler folds away, which drops
+the hook and the handler. Written any other way - a plain import, a thunk, a getter -
+it ships: the dependency edge comes from the specifier, not from the call.
 
-1. `src/index.ts` exports a no-op in production behind a lazy `require`, so the
-   bundler drops the hook and the handler.
-2. The app's command groups go too: `agent-bridge/metro` swaps the package's empty
-   groups module for the app's at resolution time, and a release bundle keeps the
-   empty one. Resolution and constant folding both run before Metro collects
-   dependencies; a runtime-deferred import runs after, and ships everything.
-
-`test/production-bundle.test.ts` checks the first with esbuild;
+`test/production-bundle.test.ts` checks that with esbuild;
 `pnpm --filter mobile check:release-bundle` checks the whole app for both platforms.
-Keep the strings that check greps for out of user-facing copy, or it turns into
-noise people learn to ignore.
+Keep the strings that check greps for out of user-facing copy, or it turns into noise
+people learn to ignore.
+
+The check greps for the transport and nothing else. The schemas, the descriptions and
+`handleRequest` itself do reach a release bundle - the app pulls the handler in when
+it imports `buildRegistry` from `agent-bridge/core` - but none of it is reachable
+without a socket, so it is bundle size rather than exposure. Checking for it would
+only teach people to ignore a failing check.
 
 ## Testing
 
-- `test/core.test.ts` - the handler, every error code, serialization.
-- `test/adapters.test.ts` - real library instances through `handleRequest`.
+- `test/core.test.ts` - the handler, every error code, serialization. Every registry
+  in it is built by hand, with a literal JSON Schema and a plain `parse`. That is
+  the point: if it ever needs zod or feature-kit to express itself, the layering has
+  leaked and the bridge has stopped being agnostic.
+- `test/adapters.test.ts` - real library instances through `handleRequest`, including
+  the feature-kit adapter's duplicate, missing-handler and symbol-collision cases.
 - `test/cli.integration.test.ts` - the built binary against `test/fake-broadcaster.ts`,
   a local copy of Metro's endpoint plus a fake app peer. It covers every exit code.
 - `test/mcp.integration.test.ts` - the built MCP binary against the same broadcaster,

@@ -5,10 +5,11 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 
 import { RootNavigator } from "../navigation/RootNavigator";
+import { commandRegistry } from "./commands";
 import { apolloClient, dismissedNewsStore, navigationRef, settingsStore } from "./instances";
 
 export default function App() {
-	useAgentBridge();
+	useAgentBridge(commandRegistry);
 
 	useEffect(() => {
 		void settingsStore.getState().load();

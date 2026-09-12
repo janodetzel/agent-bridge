@@ -23,7 +23,6 @@
 	"files": [
 		"build",
 		"dist",
-		"metro",
 		"expo-module.config.json"
 	],
 	"license": "MIT",
@@ -38,6 +37,7 @@
 		"@types/ws": "^8.18.1",
 		"expo": "~57.0.22",
 		"expo-module-scripts": "^4.1.7",
+		"feature-kit": "workspace:*",
 		"graphql": "^17.0.2",
 		"react": "19.2.3",
 		"react-native": "0.86.3",
@@ -48,7 +48,8 @@
 	"peerDependencies": {
 		"expo": ">=53.0.0",
 		"react": "*",
-		"zod": "^4.0.0"
+		"zod": "^4.0.0",
+		"feature-kit": "*"
 	},
 	"exports": {
 		".": {
@@ -63,14 +64,6 @@
 			"types": "./build/core/protocol.d.ts",
 			"default": "./build/core/protocol.js"
 		},
-		"./groups": {
-			"types": "./build/groups.d.ts",
-			"default": "./build/groups.js"
-		},
-		"./metro": {
-			"types": "./metro/index.d.ts",
-			"default": "./metro/index.cjs"
-		},
 		"./react-navigation": {
 			"types": "./build/adapters/react-navigation.d.ts",
 			"default": "./build/adapters/react-navigation.js"
@@ -83,7 +76,11 @@
 			"types": "./build/adapters/zustand.d.ts",
 			"default": "./build/adapters/zustand.js"
 		},
-		"./package.json": "./package.json"
+		"./package.json": "./package.json",
+		"./feature-kit": {
+			"types": "./build/adapters/feature-kit.d.ts",
+			"default": "./build/adapters/feature-kit.js"
+		}
 	},
 	"peerDependenciesMeta": {
 		"@apollo/client": {
@@ -93,6 +90,12 @@
 			"optional": true
 		},
 		"zustand": {
+			"optional": true
+		},
+		"zod": {
+			"optional": true
+		},
+		"feature-kit": {
 			"optional": true
 		}
 	},
