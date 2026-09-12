@@ -1,4 +1,4 @@
-import type { Spec } from "feature-kit";
+import type { Spec } from "@janodetzel/feature-kit";
 import { z } from "zod";
 
 export const newsSpec = {

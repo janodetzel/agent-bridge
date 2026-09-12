@@ -1,5 +1,5 @@
 import type { ApolloClient } from "@apollo/client";
-import { defineFeature } from "feature-kit";
+import { defineFeature } from "@janodetzel/feature-kit";
 
 import { getNews, visibleArticles } from "./api";
 import { newsSpec } from "./spec";

@@ -108,7 +108,7 @@ The pattern is mostly constraints on how code is written, and a constraint nobod
 checks is a comment. `feature-kit/eslint` is a flat-config plugin:
 
 ```js
-import featureKit from "feature-kit/eslint";
+import featureKit from "@janodetzel/feature-kit/eslint";
 
 export default [...featureKit.configs.recommended];
 ```
