@@ -1,0 +1,39 @@
+name: Publish packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads the version from `packageManager` in the root package.json.
+      - uses: pnpm/action-setup@v4
+
+      # Writes an .npmrc that points @janodetzel at GitHub Packages and reads
+      # NODE_AUTH_TOKEN.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: "@janodetzel"
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck && pnpm lint && pnpm test && pnpm depcruise
+
+      # Explicit filters: packages/app-commands/webui is a workspace package too.
+      # pnpm rewrites workspace:* and skips a version that is already published,
+      # so a re-run publishes only the packages whose version was bumped.
+      - run: pnpm --filter @janodetzel/feature-kit --filter @janodetzel/app-commands publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

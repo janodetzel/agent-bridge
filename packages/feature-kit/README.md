@@ -18,6 +18,20 @@ this README does not restate it.
 | `@janodetzel/feature-kit/eslint`    | The five rules, as a flat-config plugin                        |
 | `@janodetzel/feature-kit/depcruise` | `rules()`, the sibling-feature boundary for dependency-cruiser |
 
+## Installing from GitHub Packages
+
+The package is published to GitHub Packages, not npmjs.org. Point the scope at it in
+the consuming project's `.npmrc`:
+
+```
+@janodetzel:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+GitHub Packages asks for a token even for a public package: `GITHUB_TOKEN` must be a
+token with the `read:packages` scope (`gh auth refresh -s read:packages`, then
+`export GITHUB_TOKEN=$(gh auth token)`).
+
 ## The pattern
 
 A feature has two parts. A **spec** declares the entry points, their argument
