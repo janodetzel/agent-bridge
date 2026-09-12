@@ -1,4 +1,4 @@
-import { META, type AnyFeature } from "feature-kit";
+import { META, type AnyFeature } from "@janodetzel/feature-kit";
 
 import type { Registry } from "../core/command";
 import { fromZod } from "./zod";

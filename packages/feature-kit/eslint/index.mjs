@@ -29,7 +29,7 @@ const plugin = { meta: { name: "feature-kit" }, rules };
  * Flat config. Spread it:
  *
  * ```js
- * import featureKit from "feature-kit/eslint";
+ * import featureKit from "@janodetzel/feature-kit/eslint";
  * export default [...featureKit.configs.recommended];
  * ```
  *

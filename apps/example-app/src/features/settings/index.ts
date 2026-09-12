@@ -1,4 +1,4 @@
-import { defineFeature } from "feature-kit";
+import { defineFeature } from "@janodetzel/feature-kit";
 
 import { settingsSpec } from "./spec";
 import type { SettingsStore } from "./store";

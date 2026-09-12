@@ -79,7 +79,10 @@ describe("no-cross-feature-import", () => {
 				code: `import { news } from "../../app/instances";`,
 				filename: logic("news", "NewsScreen.tsx"),
 			},
-			{ code: `import { defineFeature } from "feature-kit";`, filename: logic("news", "index.ts") },
+			{
+				code: `import { defineFeature } from "@janodetzel/feature-kit";`,
+				filename: logic("news", "index.ts"),
+			},
 			{ code: `import { todosSpec } from "../todos/spec";`, filename: `${APP}/app/agent.ts` },
 		],
 		invalid: [
