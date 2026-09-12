@@ -1,178 +1,110 @@
 ---
 name: building-a-feature
-description: Add or change a feature so an agent can drive it from the CLI. Use when adding a screen, a store, a GraphQL mutation, or an entry point, when wiring new state into the app, or when a feature exists but has no spec. Covers the folder shape, the four rules that keep commands honest, registration, and the tests to write.
+description: Add or change a feature with @janodetzel/feature-kit so the UI and an agent call the same business logic. Use when adding a screen, a store, a mutation, or an entry point, when moving state out of a component, when a lint rule from feature-kit fails, or when a feature has logic but no spec.
 ---
 
 # Building a feature
 
-A feature holds its logic and its UI side by side:
+A feature is agent-addressable when every action a user can take is also a named command with typed arguments. The screen and the command call the same function on the same instances. A second implementation is worse than none, because the agent then verifies a path no user takes.
+
+## The shape
+
+One folder per feature, logic and UI side by side:
 
 ```
 src/features/<feature>/
-	spec.ts         the entry points: names, argument schemas, descriptions
-	index.ts        createX(deps) -> defineFeature(...).create(handlers)
-	api.ts          operation functions over Apollo, one per mutation, each owning its cache update
-	store.ts        createXStore(deps) for client state
-	gql.ts          queries, mutations, fragments
+	spec.ts       entry points: names, argument schemas, descriptions
+	index.ts      createX(deps) calling defineFeature(...).create(handlers)
+	store.ts      createXStore(deps), for client state
+	api.ts        one operation function per server mutation
 	<Feature>Screen.tsx
 ```
 
-`spec.ts` and `index.ts` are the feature. The rest depends on where its state lives:
-`todos` has `api.ts` and `gql.ts`; `settings` has `store.ts`; `news` has both.
+`spec.ts` and `index.ts` are required. Add `store.ts`, `api.ts`, or both, depending on where the state lives. The lint rules treat `spec.ts`, `index.ts`, `store.ts`, and `api.ts` as logic files by name. Logic in any other file, such as `helpers.ts`, is not checked. Put it in one of the four, or widen the rules' `logicFiles` option.
 
-## The four rules
+## Steps
 
-Break one of these and a command verifies something a user never sees.
+1. **Write the spec.** One entry per capability, each with a zod schema and a description:
 
-1. **One instance.** `src/app/instances.ts` is the only file that creates the
-   client, the stores, and the navigation ref. The screen and the command both
-   import from there. A client built inside a component with `useMemo` is
-   unreachable for the bridge.
-2. **One code path.** The feature method _is_ the command. The screen calls
-   `todos.add({ title })` and so does the bridge, so there is nothing to keep in
-   sync. If the screen reaches the same goal another way, the agent tests the
-   wrong path.
-3. **Promises settle when the work is done.** Every entry point resolves only after
-   the save or the request finished, and rejects when it failed. A fire-and-forget
-   call makes a command report success before the work runs.
-   `@typescript-eslint/no-floating-promises` catches most of it.
-4. **Results survive JSON.** Return picked fields, never a whole store state: the
-   state object carries its actions, and functions do not survive `JSON.stringify`.
-   `Date` becomes an ISO string; `Map`, `Set`, `NaN`, and cycles fail the command.
+   ```ts
+   export const favoritesSpec = {
+   	add: {
+   		args: z.object({ itemId: z.string().min(1) }),
+   		description:
+   			"Adds an item to the favorites and returns the list. No-op if the item is already a favorite.",
+   	},
+   } as const satisfies Spec;
+   ```
 
-## Client state: a store factory
+   Keep `as const`. Without it, `satisfies` widens each description to `string` and the text disappears from hovers and type errors.
 
-```ts
-export const createSettingsStore = (deps: SettingsDeps) =>
-	createStore<SettingsState & SettingsActions>()((set, get) => ({ … }));
-```
+   The description is the only thing an agent knows about the command. Say what it does, what it returns, and what it does _not_ do. Never generate it from the method name.
 
-The factory takes its dependencies as parameters. That is the whole of dependency
-injection here, and it is what lets a test pass in-memory storage. Only `store.ts`
-calls `set` — `feature-kit/no-set-outside-store` enforces it. An optimistic update
-rolls back and rethrows on failure; the rethrow is what makes the command fail, and
-`feature-kit/require-rethrow` fails the build without it.
+2. **Keep state outside the component tree.** A command runs when no component is mounted, so anything it reads or changes cannot live in `useState`.
+   - Client state goes in a store created by a factory that takes its dependencies: `createFavoritesStore({ storage })`. Only `store.ts` calls `set`.
+   - Server state stays in the query cache. Each mutation gets one operation function in `api.ts` that owns its cache update. Reads can stay with the query hook.
+   - Storage, the network, the clock, and randomness arrive as dependencies. Take a `clock` instead of calling `Date.now()`.
 
-Take a `clock` dependency instead of calling `Date.now`, or a test and a command see
-different times. `feature-kit/no-ambient-io` catches that one.
+3. **Implement the handlers.** The handler types come from the spec, so a missing handler, an extra handler, or an undeclared argument is a compile error:
 
-## Server state: an operation function
+   ```ts
+   export const createFavorites = (deps: FavoritesDeps) =>
+   	defineFeature("favorites", favoritesSpec).create({
+   		async add({ itemId }) {
+   			await deps.store.getState().add(itemId);
+   			return deps.store.getState().ids;
+   		},
+   	});
+   ```
 
-Apollo's cache is the store for server data; never copy server data into Zustand.
-One function per mutation in `api.ts`, each owning its `update`. Both the screen and
-the command call it:
+   Every handler returns a promise that resolves when the work is finished and rejects when it fails. Await every call inside it, delegates included. A fire-and-forget call makes the command report success before the save runs.
 
-```tsx
-const onAdd = () => addTodo(apolloClient, title); // screen
-run: async ({ title }) => {
-	await addTodo(client, title);
-	return getTodos(client, "cache");
-};
-```
+   Return picked, JSON-safe fields, never a whole store state. Store state carries functions, and `Map`, `Set`, `NaN`, and cycles fail the command.
 
-Reads stay with `useQuery`, because that hook subscribes the screen to the cache.
-Mutations go through the operation function; `useMutation` with its own `update`
-puts the cache logic inside a component, where a command cannot reach it.
+   The namespace is camelCase. `defineFeature` throws on anything else.
 
-Check `error` on the mutation result and throw. With `errorPolicy: "all"` the errors
-arrive in the result instead of being thrown, and a command that ignores them
-reports success on a failed mutation.
+4. **Create the instance in the composition root.** One file creates the API client, the stores, the navigation reference, and the features, and passes each feature its dependencies. The UI and the command registry both import from that file. Never create a client or a store inside a component.
 
-## The spec and the handlers
+   A feature never imports another feature. If it needs something from a sibling, the composition root passes it a getter or a delegate, never a snapshot value.
 
-`spec.ts` declares what exists:
+5. **Call the feature from the screen.** The screen calls `favorites.add({ itemId })`, the same method the command calls. Move any rule in a UI handler into the feature: a `catch` that treats a conflict as success, or a guard that skips a duplicate.
 
-```ts
-export const todosSpec = {
-	list: {
-		args: z.object({ source: z.enum(["cache", "network"]).default("cache") }),
-		description:
-			"Returns the todos. source=cache is what the screen shows now, source=network is what the server has. Read cache first: a network read writes to the cache and hides a broken cache update.",
-	},
-} as const satisfies Spec;
-```
+6. **Register it.** Add the feature to the `featureCommands(...)` call in the registry. That emits one command per spec entry. Nothing else is registered by hand.
 
-`as const` is not decoration: `satisfies Spec` alone widens every description to
-`string`, and with it the text disappears from every hover and every type error.
-Written this way the literal survives into `typeof todosSpec`, so the editor shows
-what the agent is told without opening `spec.ts`.
+7. **Test and verify.** Build the feature with in-memory dependencies and call its handlers in a unit test, no simulator needed. Run `checkRegistry` from `@janodetzel/app-commands/conformance` against the registry. Then verify the behavior in the running app with the `driving-the-app` skill.
 
-`index.ts` implements it:
+## What the checks catch
 
-```ts
-export const createTodos = (deps: TodosDeps) =>
-	defineFeature("todos", todosSpec).create({
-		async list({ source }) {
-			return getTodos(deps.apollo, source);
-		},
-	});
+When a rule blocks you, move the code. Do not disable or widen the rule.
 
-export type Todos = ReturnType<typeof createTodos>;
-```
+| Rule                                                  | Catches                                                                                                                                                                                            |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@typescript-eslint/no-floating-promises`             | A promise nobody awaits. Not part of feature-kit: enable it as an error.                                                                                                                           |
+| `feature-kit/no-ui-in-logic`                          | React, React Native, Expo, or React Navigation imported into a logic file                                                                                                                          |
+| `feature-kit/no-set-outside-store`                    | `set` or `setState` outside `store.ts`                                                                                                                                                             |
+| `feature-kit/require-rethrow`                         | A `catch` in `store.ts` that does not rethrow                                                                                                                                                      |
+| `feature-kit/no-ambient-io`                           | `Date.now`, `Date.parse`, or `Math.random` in a logic file                                                                                                                                         |
+| `feature-kit/no-cross-feature-import`                 | One feature importing another                                                                                                                                                                      |
+| `no-sibling-feature-import` (feature-kit's depcruise) | The same, as a package edge, so a deep relative import cannot slip past                                                                                                                            |
+| `checkRegistry`                                       | A duplicate or malformed name, a description no longer than the name, a schema that is not an object, a `parse` that accepts anything, and a non-JSON-safe result for commands listed in `samples` |
 
-The handler signatures come from the spec, so a missing handler, an extra one, or a
-field the handler destructures that the schema does not declare is a compile error.
+## Mistakes the checks miss
 
-Write the description for the agent: what it does, what it returns, and what it does
-_not_ do. It is all the agent gets, and "no-op if already dismissed" saves a wrong
-conclusion. Never generate one from the method name.
-
-Namespaces are camelCase, and `defineFeature` throws on anything else.
-
-Expose a `source: "cache" | "network"` argument on every read of server data. That
-pair is what makes a broken cache update visible.
-
-## Registering it
-
-Create the feature in `src/app/instances.ts`, next to the instances it needs:
-
-```ts
-export const todos = createTodos({ apollo: apolloClient });
-```
-
-Then add it to the `featureCommands(...)` call in `src/app/commands.ts`:
-
-```ts
-export const commandRegistry = buildRegistry(
-	featureCommands(todos, news, settings),
-	apolloCommands(apolloClient),
-	navigationCommands(navigationRef as NavigationRef, { routes: RouteName }),
-);
-```
-
-`App.tsx` passes that to `useAppCommands`, and nothing else is needed.
-
-A new screen also needs an entry in `src/navigation/routes.ts` — both in
-`RootStackParamList` and in the `RouteName` enum, which a type test keeps in sync.
-
-## The boundary
-
-`api.ts`, `store.ts`, `spec.ts` and `index.ts` may not import React, React Native,
-Expo, or React Navigation; `feature-kit/no-ui-in-logic` enforces it. The rule matches
-those four names only, so a `helpers.ts` in a feature folder slips through — put logic
-a command needs in one of the four, or widen `logicFiles` in the rule's options.
-
-A feature never imports another feature; `feature-kit/no-cross-feature-import` enforces
-that. Wire them together in `src/app/instances.ts`, passing a getter or a delegate —
-never a snapshot value, or the port goes stale.
-
-## Tests
-
-`handleRequest` needs only a registry, so commands are testable without a simulator:
-build the store with in-memory storage, build an `ApolloClient` against the stand-in
-schema in `src/app/api.ts`, wrap the feature with `featureCommands`, and call it the
-way the CLI does.
-
-Worth a test every time: cache and network agree after a mutation; a failing save
-rolls the store back and fails the command; an invalid argument is rejected.
+- A button that does something no command can do. No tool can detect it. Check that every user action has a spec entry.
+- A mutation hook with its own cache update inside a component. A command cannot reach that update.
+- Mutation errors returned in the result, not thrown, for example with an `errorPolicy` of `"all"`. Check the error and throw, or the command reports success on a failed write.
+- A `catch` that swallows the error outside `store.ts`, for example in `api.ts` or a handler. `require-rethrow` checks store files only.
+- `new Date()` without arguments in a logic file. `no-ambient-io` does not catch it, so take the time from the `clock` dependency.
 
 ## Checklist
 
-- [ ] Instances come from `src/app/instances.ts`
+- [ ] Every user action in the feature has a spec entry with a description that says what it does not do
 - [ ] The screen calls the feature method, not a parallel implementation
-- [ ] Every async path resolves when the work is done, and rejects when it fails
-- [ ] The command returns picked, JSON-safe fields
-- [ ] Reads of server data take `source`
-- [ ] The feature is in `src/app/commands.ts`
-- [ ] `pnpm typecheck && pnpm lint && pnpm test && pnpm depcruise`
-- [ ] Verified in the simulator with `pnpm app-commands`
+- [ ] State a command needs lives in a store or the query cache, not in a component
+- [ ] Instances and features are created only in the composition root
+- [ ] Every handler awaits its work and rejects on failure
+- [ ] Handlers return picked, JSON-safe fields
+- [ ] Time, randomness, storage, and network arrive as dependencies
+- [ ] The feature is passed to `featureCommands`
+- [ ] Typecheck, lint, tests, and dependency-cruiser pass
+- [ ] The behavior is verified in the running app with `driving-the-app`

@@ -1,128 +1,51 @@
 ---
 name: driving-the-app
-description: Run commands against the app in a simulator with `pnpm app-commands` to verify behavior, read state, or navigate. Use when checking whether a change actually works at runtime, when inspecting the Apollo cache or a Zustand store, when a bug reproduces only in the running app, or when a task says to verify in the simulator. Covers the exit codes, the cache-versus-network check, the connection rules, and when to reach for the ios-simulator or android-emulator skills instead.
+description: Run typed commands against a running React Native or Expo app with the app-commands CLI to set up state, call business logic, and read results back without tapping through the UI. Use when verifying that a change works at runtime, reading app state, reproducing a bug in the running app, or putting the app on a screen before a visual check.
 ---
 
-# Driving the app from the CLI
+# Driving the app with app-commands
 
-The running app exposes its business logic over Metro. A command calls the same
-store action or operation function a tap calls, on the same instances, so what you
-verify here is what a user gets.
+The app exposes its business logic as named commands over the Metro dev server. A command calls the same function the UI calls, on the same instances, so a result here is what a user gets.
 
-## Before the first call
+Run the CLI through the project's package manager: `pnpm app-commands`, `npx app-commands`, or `yarn app-commands`. The examples below use `app-commands`.
 
-1. Metro and a simulator must be running: `pnpm --filter example-app start`, then press
-   `i` for iOS or `a` for Android. Exit code 2 means nothing is connected.
-2. On an Android emulator, run `adb reverse tcp:8081 tcp:8081` once.
-3. After changing app code, reload the app (press `r` in Metro) before running
-   commands. The bridge serves the bundle the app is currently running.
+For a normal task, start immediately. Do not probe first with `--help`:
 
-## Finding out what exists
-
-```
-pnpm app-commands list
+```bash
+app-commands list
 ```
 
-Returns every command with its description and the JSON Schema of its arguments.
-Never guess a command name: the list is the contract, and it changes with the app,
-not with the CLI.
+That returns every command with its description and the JSON Schema of its arguments. Never guess a command name or an argument. The list comes from the running app and changes with it. Read the descriptions: they say what a command does not do.
 
-## Calling a command
+Loop: call a command, read the JSON on stdout, then verify with a read command instead of trusting the write's result alone.
 
-```
-pnpm app-commands todos.add --title "Buy milk"
-pnpm app-commands todos.list --source cache
-pnpm app-commands settings.setUnits --units mi
-pnpm app-commands nav.navigate --screen Settings
+```bash
+app-commands <namespace>.<name> --<arg> <value>
+app-commands <namespace>.<name> --args '{"items":["a","b"]}'
 ```
 
-Flags come from the schema: strings take the value as typed, numbers are parsed, a
-boolean is `--flag` or `--no-flag`, and an enum is checked before the call goes out.
-An object or array argument has no flag; pass the whole argument object as JSON with
-`--args '{"…":…}'`, which cannot be combined with individual flags.
+Flags follow the schema. A string takes the value as typed, a number is parsed, a boolean is `--flag` or `--no-flag`, and an enum is checked before the call goes out. An object or array argument has no flag, so pass the whole argument object with `--args`. `--args` cannot be combined with other flags. Globals: `--pretty`, `--timeout <ms>`, `--host`, `--port` (default `localhost:8081`).
 
-Useful globals: `--pretty` to indent, `--timeout <ms>` for a slow command, `--host`
-and `--port` for a dev server that is not `localhost:8081`.
+stdout holds one JSON document per call. On failure it is `{ "error", "code", "issues" }`. stderr holds the duration and diagnostics.
 
-## Reading the result
+| Exit | Codes                                                        | Do this                                                                                                                                                  |
+| ---- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | none                                                         | Read the result.                                                                                                                                         |
+| 1    | `COMMAND_FAILED`, `INVALID_ARGS`, `UNKNOWN_COMMAND`, `USAGE` | Fix the call from `issues` or the message. Run `list` again for an unknown command.                                                                      |
+| 2    | `CONNECTION_FAILED`, `PROTOCOL_MISMATCH`                     | For `CONNECTION_FAILED`, check the rules below. For `PROTOCOL_MISMATCH`, the CLI and the app use different package versions: rebuild and reload the app. |
 
-stdout is exactly one JSON document per call, so it can be piped into `jq`. stderr
-carries the duration and the error, for a human.
+## Rules
 
-| Exit | Meaning                                                      | What to do                                                                   |
-| ---- | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| 0    | The command ran                                              | Read the result on stdout                                                    |
-| 1    | `COMMAND_FAILED`, `INVALID_ARGS`, `UNKNOWN_COMMAND`, `USAGE` | `INVALID_ARGS` carries the Zod issues; fix the call from those, do not guess |
-| 2    | `CONNECTION_FAILED` or `PROTOCOL_MISMATCH`                   | Start Metro and the app, or rebuild the package and reload                   |
+- **Metro and the app must be running.** If exit code 2 persists, ask the user to start Metro and open the app. Do not start a simulator on your own unless the task says so.
+- **Reload after a code change.** The commands run the bundle the app has loaded. Reload the app (`r` in the Metro terminal, or ask the user), then run `list` again.
+- **One client at a time.** The app keeps one CLI, web console, or MCP server and drops the older one, which then exits with code 2.
+- **One device at a time.** Every connected device runs the command. Keep only one on Metro.
+- **Android emulator:** run `adb reverse tcp:8081 tcp:8081` once before the first call.
 
-## The check that finds cache bugs
+If the project registers the `app-commands` MCP server and its tools are in your tool list, prefer them. Each command is a tool with `_` in place of the dot, so `cart.add` becomes `cart_add`. The tool list is a snapshot, so call the `list` tool after a reload. The MCP server counts as the one client.
 
-After a mutation that touches server data, compare the two sources, **cache first**:
+## Commands check data, the UI tools check pixels
 
-```
-pnpm app-commands todos.list --source cache
-pnpm app-commands todos.list --source network
-```
+Use commands to set up state and read it back. A screenshot or a UI tree cannot tell a cached value from a saved one. When the question is whether a screen renders correctly or a button is wired up, use the `ios-simulator` or `android-emulator` skill. A common pattern is to set up state with commands, navigate with a navigation command if the app has one, then take a snapshot with `agent-device`.
 
-They must match. A difference means the `update` in the feature's operation
-function is wrong: the screen looks right until the next refetch, which is why this
-class of bug is otherwise hard to see. Read `cache` first — a `network-only` query
-writes its result into the cache and hides the bug from every later `cache` read.
-
-## Rules of the connection
-
-- **One client at a time.** The app keeps a single CLI, web console, or MCP server
-  and drops the previous one when another connects. A dropped client's next call
-  fails with exit 2 saying the app dropped it. Close the web console before working
-  from the CLI.
-- **Every connected device answers.** With a simulator and an emulator both on
-  Metro, a command runs on both and the CLI reports whichever answered first. Keep
-  one device connected.
-
-## The same commands as MCP tools
-
-`.mcp.json` at the workspace root registers an `app-commands` MCP server, which
-exposes every command as a tool named with `_` in place of the dot - `todos.add`
-becomes `todos_add` - with the app's own argument schema. If those tools are in
-your tool list, prefer them: they are the same commands over the same client, and
-the arguments are checked before the call.
-
-Two rules carry over. The tool list is a snapshot, so after reloading the app call
-the `list` tool to pick up anything new; and the server counts against the one
-client at a time rule below, so a `pnpm app-commands` call in a terminal and a tool
-call drop each other.
-
-## When to use the simulator skills instead
-
-The `ios-simulator` and `android-emulator` skills drive the device through
-`agent-device`: they tap, type, scroll, and read the live UI tree. They answer a
-different question than this bridge does.
-
-| Question                                                                   | Reach for                                                             |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Did the mutation land? What is in the cache or the store?                  | `pnpm app-commands <command>`                                         |
-| Do cache and server agree after a write?                                   | `pnpm app-commands todos.list --source cache` then `--source network` |
-| Does the screen render that state correctly?                               | `ios-simulator` / `android-emulator`                                  |
-| Is the button actually wired to the logic? Does the flow work when tapped? | `ios-simulator` / `android-emulator`                                  |
-| Which screen is focused, and can I get to another one?                     | either: `nav.navigate` is faster, a tap is more faithful              |
-
-A command calls the same function a tap calls, which is the point — but that also
-means it never exercises the tap handler, the disabled state, or the layout. Only a
-real tap does. Conversely, reading a list off the screen tells you what rendered,
-not what the cache holds, and those differ exactly when a cache update is broken.
-
-The two work well together: set state up with commands, which is fast and exact,
-then check the rendering with `agent-device`. For example, `todos.add` three items
-and `nav.navigate --screen Home`, then snapshot the screen to see how the list
-looks. `agent-device` talks to the device directly rather than through Metro's
-plugin channel, so it does not count against the one-client rule below.
-
-## What not to do
-
-- Do not verify data with screenshots or the UI tree. Use the data commands; use
-  `nav.navigate` only to put the app on a screen for a rendering check, and the
-  simulator skills to judge that rendering.
-- Do not add a command that reaches around the UI's code path. A command calls the
-  function the screen calls, or it verifies nothing.
-- Do not point a dev build carrying the bridge at production data. It accepts any
-  command from anything that can reach Metro.
+Never run commands against a dev build that points at production data.
