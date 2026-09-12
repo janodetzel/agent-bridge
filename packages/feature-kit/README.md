@@ -24,8 +24,12 @@ export const favoritesSpec = {
 		args: z.object({ itemId: z.string().min(1) }),
 		description: "Removes an item. Fails if the item is not a favorite.",
 	},
-} satisfies Spec;
+} as const satisfies Spec;
 ```
+
+`as const` keeps each description a literal type. `satisfies Spec` alone checks the
+shape and then widens the text to `string`, which drops it from hovers and type
+errors; with `as const` the description is visible wherever the spec's type is.
 
 ```ts
 // features/favorites/index.ts

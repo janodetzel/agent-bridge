@@ -89,8 +89,13 @@ export const todosSpec = {
 		description:
 			"Returns the todos. source=cache is what the screen shows now, source=network is what the server has. Read cache first: a network read writes to the cache and hides a broken cache update.",
 	},
-} satisfies Spec;
+} as const satisfies Spec;
 ```
+
+`as const` is not decoration: `satisfies Spec` alone widens every description to
+`string`, and with it the text disappears from every hover and every type error.
+Written this way the literal survives into `typeof todosSpec`, so the editor shows
+what the agent is told without opening `spec.ts`.
 
 `index.ts` implements it:
 

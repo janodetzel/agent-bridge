@@ -44,4 +44,4 @@ export const todosSpec = {
 		args: z.object({}),
 		description: "Removes all todos and clears the cache.",
 	},
-} satisfies Spec;
+} as const satisfies Spec;

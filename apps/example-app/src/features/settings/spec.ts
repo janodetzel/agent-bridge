@@ -19,4 +19,4 @@ export const settingsSpec = {
 		description:
 			"Turns notifications on or off and saves. Fails when the save fails, and the screen keeps the old value.",
 	},
-} satisfies Spec;
+} as const satisfies Spec;

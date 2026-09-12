@@ -10,8 +10,17 @@ import type { z } from "zod";
  */
 export const META: unique symbol = Symbol("feature-kit.meta");
 
-/** What a feature declares: one entry per entry point, keyed by its name. */
-export type Spec = Record<string, { args: z.ZodTypeAny; description: string }>;
+/**
+ * What a feature declares: one entry per entry point, keyed by its name.
+ *
+ * Write a spec as `{ ... } as const satisfies Spec`. `satisfies` alone checks
+ * the shape but widens every description to `string`, and the text is the half
+ * of the API a reader wants to see: with `as const` the literal survives into
+ * `typeof spec`, so a hover on the spec, on `defineFeature`'s inferred `S`, or
+ * on `feature[META]` shows what the agent is told. The literals are the reason
+ * `Spec` accepts readonly properties.
+ */
+export type Spec = Record<string, { readonly args: z.ZodTypeAny; readonly description: string }>;
 
 /**
  * The signatures the spec implies. A missing handler, an extra handler, or an

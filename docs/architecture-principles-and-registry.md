@@ -184,7 +184,7 @@ export const favoritesSpec = {
 		args: z.object({ source: z.enum(["cache", "network"]).default("cache") }),
 		description: "Reloads favorites. cache returns what the UI shows now, network returns what the server has.",
 	},
-} satisfies Spec;
+} as const satisfies Spec;
 ```
 
 ```ts

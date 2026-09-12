@@ -23,9 +23,9 @@ export const commandRegistry = buildRegistry(
 	featureCommands(todos, news, settings),
 	zodCommands("example-command", {
 		inout: {
-			args: z.string(),
+			args: z.object({ arg: z.string() }),
 			description: "A command that forwards it's input",
-			run: async (args) => args,
+			run: async ({ arg }) => ({ arg }),
 		},
 	}),
 	apolloCommands(apolloClient),

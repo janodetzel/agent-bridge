@@ -19,4 +19,4 @@ export const newsSpec = {
 		description:
 			"Returns the ids dismissed so far, including ids of articles the server no longer serves.",
 	},
-} satisfies Spec;
+} as const satisfies Spec;
