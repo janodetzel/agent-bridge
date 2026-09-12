@@ -118,6 +118,37 @@ is not connected, or the app does not call `useAgentBridge`.
 On the Android emulator, run `adb reverse tcp:8081 tcp:8081` once before the first
 call. The iOS simulator reaches `localhost` without it.
 
+## The MCP server
+
+`agent-bridge-mcp` speaks MCP over stdio and exposes the same commands as tools, so
+an agent calls them with typed arguments instead of shelling out. Register it by
+pointing a client at the binary:
+
+```json
+{
+	"mcpServers": {
+		"agent-bridge": { "command": "node_modules/.bin/agent-bridge-mcp", "args": [] }
+	}
+}
+```
+
+It takes the same `--host`, `--port` and `--timeout` options as the CLI, or reads
+`AGENT_BRIDGE_HOST`, `AGENT_BRIDGE_PORT` and `AGENT_BRIDGE_TIMEOUT`.
+
+Each command becomes one tool, named with `_` in place of the dot - `todos.add`
+becomes `todos_add` - carrying the app's own argument schema. Two tools are always
+present: `commands` returns the live list and republishes the tool list if it
+changed, and `run` calls a command by its `<namespace>.<name>` when the tool list has
+gone stale. A failing call comes back with `isError` and the same
+`{ error, code, issues }` the CLI prints.
+
+The tool list is a snapshot taken when a client asks for it. After reloading the app,
+call `commands` to pick up anything new. The server counts against the one client at
+a time rule, so it and a terminal running `agent-bridge` drop each other.
+
+Do not launch it through a package-manager script: pnpm writes its banner to stdout,
+where only MCP traffic belongs.
+
 ## The web console
 
 `pnpm --filter agent-bridge web:dev` serves the console, and the Metro Shift+M menu

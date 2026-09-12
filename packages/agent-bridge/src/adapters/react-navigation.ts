@@ -37,6 +37,16 @@ export function navigationCommands(
 			},
 		}),
 
+		state: command({
+			description: "Returns the current navigation state, or null before the container is ready.",
+			args: z.object({}),
+			run: async () => {
+				const state = ref.getState();
+				const rootState = ref.getRootState();
+				return { state, rootState };
+			},
+		}),
+
 		navigate: command({
 			description:
 				"Navigates like a user tap. Fails if the route does not become focused in time, which is what an unknown route looks like.",

@@ -72,7 +72,7 @@ module.exports = {
 			comment:
 				"An import that does not resolve slips past every layer rule, because the rules match the resolved path.",
 			severity: "error",
-			from: { path: "^(packages|apps)/[^/]+/(src|cli|test)" },
+			from: { path: "^(packages|apps)/[^/]+/(src|cli|mcp|test)" },
 			to: { couldNotResolve: true },
 		},
 		{

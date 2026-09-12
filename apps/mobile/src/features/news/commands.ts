@@ -11,14 +11,14 @@ export const newsCommands = (client: ApolloClient, dismissedStore: DismissedNews
 			description:
 				"Returns the articles that have not been dismissed. source=cache is what the screen shows right now, source=network is what the server has. Read cache first: a network read writes to the cache and hides a broken cache update.",
 			args: z.object({ source: z.enum(["cache", "network"]).default("cache") }),
-			run: ({ source }) => getVisibleArticles(dismissedStore, client, source)
+			run: ({ source }) => getVisibleArticles(dismissedStore, client, source),
 		}),
 
 		dismiss: command({
 			description:
 				"Dismisses one article locally, so it drops out of news.list. Fails when the save fails.",
 			args: z.object({ id: z.string().min(1) }),
-			run: ({ id }) => dismissArticle(dismissedStore, id)
+			run: ({ id }) => dismissArticle(dismissedStore, id),
 		}),
 
 		dismissed: command({

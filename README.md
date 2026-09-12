@@ -15,7 +15,7 @@ The design lives in `docs/`:
 
 ```
 packages/
-	agent-bridge/  The Expo dev tools plugin: core protocol, app hook, CLI, web UI.
+	agent-bridge/  The Expo dev tools plugin: core protocol, app hook, CLI, MCP server, web UI.
 apps/
 	mobile/        A todo list that registers its commands with the bridge.
 ```
@@ -60,6 +60,10 @@ $ pnpm agent-bridge todos.list --source cache
 $ pnpm agent-bridge settings.setUnits --units mi
 $ pnpm agent-bridge nav.navigate --screen Settings
 ```
+
+The same commands reach an MCP client as typed tools. `.mcp.json` registers the
+`agent-bridge` server, which turns every command into one tool - `todos.add` becomes
+`todos_add` - plus `commands` to refresh the list and `run` to call one by name.
 
 `packages/agent-bridge/README.md` covers the CLI, the exit codes, the adapters, and
 the console. `CLAUDE.md` says how an agent should use it.

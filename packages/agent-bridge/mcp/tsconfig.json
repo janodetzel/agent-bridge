@@ -1,0 +1,19 @@
+{
+	"extends": "../../../tsconfig.base.json",
+	"compilerOptions": {
+		// node16 rather than the CLI's classic resolution: the MCP SDK ships its files
+		// behind an "exports" map, which node10 resolution cannot see. The package has
+		// no "type": "module", so node16 still emits CommonJS.
+		"module": "node16",
+		"moduleResolution": "node16",
+		"target": "ES2022",
+		"lib": ["ES2023"],
+		"types": ["node"],
+		"outDir": "../build",
+		"rootDir": "..",
+		"declaration": false,
+		"declarationMap": false,
+		"sourceMap": false
+	},
+	"include": ["./**/*.ts"]
+}

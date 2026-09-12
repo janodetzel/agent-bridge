@@ -13,6 +13,7 @@ packages/agent-bridge/
 	src/index.ts    the production no-op
 	cli/            client, flags, entry point
 	cli/wire/       copied from Expo - see SOURCE.md
+	mcp/            the MCP server, over cli/client.ts
 	webui/          the command console
 ```
 
@@ -59,6 +60,34 @@ app owns validation and answers `INVALID_ARGS` with the Zod issues.
 
 stdout stays exactly one JSON document per call. Diagnostics go to stderr.
 
+## The MCP server
+
+`mcp/` is a second front end over `cli/client.ts`, not a wrapper around the binary.
+It hard-codes no command either: every command becomes a tool, built from the JSON
+Schema the app reports, with the dot in the name replaced by `_`. The two tools that
+are always there - `commands` and `run` - exist because a client starts the server
+before Metro is up, so the first `tools/list` finds no app. Answering it with those
+two rather than an error keeps `commands` reachable, and calling it once the app is
+up sends `tools/list_changed`.
+
+Three things to keep:
+
+- **Connect per call, like the CLI.** The app keeps one client at a time. A resident
+  server would drop a terminal running `agent-bridge` and be dropped by it in turn.
+- **Nothing but MCP traffic on stdout.** `cli/client.ts` and `cli/wire/` are silent,
+  which is what makes them reusable here. Diagnostics go to stderr, and `.mcp.json`
+  runs `node_modules/.bin/agent-bridge-mcp` rather than a `pnpm` script, because
+  pnpm writes its banner to stdout.
+- **The app still owns validation.** The schema goes through untouched but for
+  `$schema`, and a failure comes back as `isError` carrying the same
+  `{ error, code, issues }` the CLI prints.
+
+It builds with `tsc -p mcp/tsconfig.json`, not `expo-module build`, which knows only
+`plugin`, `cli`, `utils` and `scripts` and treats anything else as a file to
+compile. `expo-module prepare` has the same list, so `build:mcp` hangs off `prepare`
+and `prepublishOnly` too - drop it and `pnpm install` leaves the binary missing. The
+tsconfig resolves as `node16` because the MCP SDK ships behind an `exports` map.
+
 ## After an Expo SDK upgrade
 
 `cli/wire/` is copied from internal Expo code that has changed before.
@@ -94,6 +123,8 @@ noise people learn to ignore.
 - `test/adapters.test.ts` - real library instances through `handleRequest`.
 - `test/cli.integration.test.ts` - the built binary against `test/fake-broadcaster.ts`,
   a local copy of Metro's endpoint plus a fake app peer. It covers every exit code.
+- `test/mcp.integration.test.ts` - the built MCP binary against the same broadcaster,
+  driven by a real MCP client, plus the tool-name mapping on its own.
 - The fake app peer imitates the real one, including dropping a browser client when
   a second connects. Options exist to turn that off for tests that need two clients;
   do not make the production client work around it.

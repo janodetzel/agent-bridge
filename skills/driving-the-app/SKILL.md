@@ -71,12 +71,26 @@ writes its result into the cache and hides the bug from every later `cache` read
 
 ## Rules of the connection
 
-- **One client at a time.** The app keeps a single CLI or web console and drops the
-  previous one when another connects. A dropped client's next call fails with exit
-  2 saying the app dropped it. Close the web console before working from the CLI.
+- **One client at a time.** The app keeps a single CLI, web console, or MCP server
+  and drops the previous one when another connects. A dropped client's next call
+  fails with exit 2 saying the app dropped it. Close the web console before working
+  from the CLI.
 - **Every connected device answers.** With a simulator and an emulator both on
   Metro, a command runs on both and the CLI reports whichever answered first. Keep
   one device connected.
+
+## The same commands as MCP tools
+
+`.mcp.json` at the workspace root registers an `agent-bridge` MCP server, which
+exposes every command as a tool named with `_` in place of the dot - `todos.add`
+becomes `todos_add` - with the app's own argument schema. If those tools are in
+your tool list, prefer them: they are the same commands over the same client, and
+the arguments are checked before the call.
+
+Two rules carry over. The tool list is a snapshot, so after reloading the app call
+the `commands` tool to pick up anything new; and the server counts against the one
+client at a time rule below, so a `pnpm agent-bridge` call in a terminal and a tool
+call drop each other.
 
 ## When to use the simulator skills instead
 

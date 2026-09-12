@@ -11,7 +11,8 @@
 		"depcruise": "depcruise packages apps --config .dependency-cruiser.cjs",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"agent-bridge": "agent-bridge"
+		"agent-bridge": "agent-bridge",
+		"agent-bridge-mcp": "agent-bridge-mcp"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

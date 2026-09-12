@@ -110,10 +110,15 @@ The running app exposes its business logic through `pnpm agent-bridge`.
 7. Every store action and operation function must return a promise that resolves
    when the work is done. Never fire and forget.
 
+`.mcp.json` registers an `agent-bridge` MCP server that exposes the same commands as
+tools, named with `_` in place of the dot (`todos.add` becomes `todos_add`). Prefer
+those tools when they are in your tool list; call the `commands` tool after reloading
+the app, because the tool list is a snapshot.
+
 Two things to keep in mind while working:
 
-- Only one CLI or web console can be attached at a time. The app drops the older
-  one, which then exits with code 2.
+- Only one CLI, web console, or MCP server can be attached at a time. The app drops
+  the older one, which then exits with code 2.
 - Every connected device answers. With a simulator and an emulator both on Metro, a
   command runs on both. Keep one connected.
 - On the Android emulator, run `adb reverse tcp:8081 tcp:8081` once first.

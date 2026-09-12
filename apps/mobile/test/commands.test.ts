@@ -163,11 +163,15 @@ describe("news commands", () => {
 
 	beforeEach(() => {
 		const client = new ApolloClient({ link: apiLink, cache: new InMemoryCache() });
-		registry = buildRegistry([newsCommands(client, createDismissedNewsStore({ storage: memoryDismissedStorage() }))]);
+		registry = buildRegistry([
+			newsCommands(client, createDismissedNewsStore({ storage: memoryDismissedStorage() })),
+		]);
 	});
 
 	it("dismisses an article so it drops out of list", async () => {
-		const before = (await resultOf(registry, "news.list", { source: "network" })) as { id: string }[];
+		const before = (await resultOf(registry, "news.list", { source: "network" })) as {
+			id: string;
+		}[];
 		const target = before[0]!.id;
 
 		await resultOf(registry, "news.dismiss", { id: target });
@@ -183,7 +187,9 @@ describe("news commands", () => {
 		const store = createDismissedNewsStore({ storage });
 		const commands = buildRegistry([newsCommands(client, store)]);
 
-		const before = (await resultOf(commands, "news.list", { source: "network" })) as { id: string }[];
+		const before = (await resultOf(commands, "news.list", { source: "network" })) as {
+			id: string;
+		}[];
 		await resultOf(commands, "news.dismiss", { id: before[0]!.id });
 
 		const reloaded = createDismissedNewsStore({ storage });
