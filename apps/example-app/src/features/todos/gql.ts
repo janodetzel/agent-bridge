@@ -1,11 +1,19 @@
 import { gql } from "@apollo/client";
 
-export type Todo = { __typename: "Todo"; id: string; title: string; done: boolean };
+export type Todo = {
+	__typename: "Todo";
+	id: string;
+	title: string;
+	/** Empty when the todo has none; the field is never null. */
+	description: string;
+	done: boolean;
+};
 
 export const TODO_FIELDS = gql`
 	fragment TodoFields on Todo {
 		id
 		title
+		description
 		done
 	}
 `;
@@ -20,8 +28,8 @@ export const TODOS = gql`
 `;
 
 export const ADD_TODO = gql`
-	mutation AddTodo($title: String!) {
-		addTodo(title: $title) {
+	mutation AddTodo($title: String!, $description: String) {
+		addTodo(title: $title, description: $description) {
 			...TodoFields
 		}
 	}

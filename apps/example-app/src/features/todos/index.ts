@@ -17,8 +17,8 @@ export const createTodos = (deps: TodosDeps) =>
 			return getTodos(deps.apollo, source);
 		},
 
-		async add({ title }) {
-			await addTodo(deps.apollo, title);
+		async add({ title, description }) {
+			await addTodo(deps.apollo, title, description);
 			return getTodos(deps.apollo, "cache");
 		},
 

@@ -17,15 +17,15 @@ export const todosSpec = {
 	},
 
 	add: {
-		args: z.object({ title: z.string().min(1) }),
+		args: z.object({ title: z.string().min(1), description: z.string().optional() }),
 		description:
-			"Adds a todo through the API, updates the cache the way the screen does, and returns the todos from the cache.",
+			"Adds a todo through the API, updates the cache the way the screen does, and returns the todos from the cache. An omitted description is stored as an empty string; it is never null. Does not edit an existing todo: a repeated title adds a second one.",
 	},
 
 	addMany: {
 		args: z.object({ todos: z.array(z.string().min(1)) }),
 		description:
-			"Adds many todos through the API, updates the cache the way the screen does, and returns the todos from the cache.",
+			"Adds many todos through the API, updates the cache the way the screen does, and returns the todos from the cache. Takes titles only; use add for a todo that needs a description.",
 	},
 
 	setDone: {

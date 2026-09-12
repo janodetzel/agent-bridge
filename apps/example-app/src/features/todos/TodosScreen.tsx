@@ -61,7 +61,12 @@ export function TodosScreen() {
 							onPress={() => void todos.setDone({ id: item.id, done: !item.done })}
 						>
 							<Text style={styles.checkMark}>{item.done ? "☑" : "☐"}</Text>
-							<Text style={[styles.title, item.done && styles.titleDone]}>{item.title}</Text>
+							<View style={styles.text}>
+								<Text style={[styles.title, item.done && styles.titleDone]}>{item.title}</Text>
+								{item.description !== "" && (
+									<Text style={styles.description}>{item.description}</Text>
+								)}
+							</View>
 						</Pressable>
 						<Pressable onPress={() => void todos.remove({ id: item.id })}>
 							<Text style={styles.remove}>Delete</Text>
@@ -103,8 +108,10 @@ const styles = StyleSheet.create({
 		borderBottomColor: "#eaecf0",
 	},
 	check: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+	text: { flex: 1, gap: 2 },
 	checkMark: { fontSize: 18 },
 	title: { fontSize: 16, flexShrink: 1 },
 	titleDone: { color: "#98a2b3", textDecorationLine: "line-through" },
+	description: { fontSize: 14, color: "#667085" },
 	remove: { color: "#d92d20", fontSize: 14 },
 });

@@ -24,10 +24,15 @@ export async function getTodos(client: ApolloClient, source: "cache" | "network"
 	return (data as { todos?: Todo[] } | null)?.todos ?? [];
 }
 
-export async function addTodo(client: ApolloClient, title: string): Promise<Todo> {
+export async function addTodo(
+	client: ApolloClient,
+	title: string,
+	description?: string,
+): Promise<Todo> {
 	const { data, error } = await client.mutate({
 		mutation: ADD_TODO,
-		variables: { title },
+		// An omitted description is sent as null, which the API stores as "".
+		variables: { title, description: description ?? null },
 		update(cache, { data }) {
 			const added = (data as { addTodo?: Todo } | null)?.addTodo;
 			if (!added) return;

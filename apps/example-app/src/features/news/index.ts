@@ -5,7 +5,7 @@ import { getNews, visibleArticles } from "./api";
 import { newsSpec } from "./spec";
 import type { DismissedNewsStore } from "./store";
 
-export type NewsDeps = { apollo: ApolloClient; dismissed: DismissedNewsStore };
+export type NewsDeps = { apollo: ApolloClient; store: DismissedNewsStore };
 
 /**
  * Server data from the Apollo cache, local dismissals from a store, combined by
@@ -16,16 +16,16 @@ export const createNews = (deps: NewsDeps) =>
 	defineFeature("news", newsSpec).create({
 		async list({ source }) {
 			const articles = await getNews(deps.apollo, source);
-			return visibleArticles(articles, new Set(deps.dismissed.getState().dismissedIds));
+			return visibleArticles(articles, new Set(deps.store.getState().dismissedIds));
 		},
 
 		async dismiss({ id }) {
-			await deps.dismissed.getState().dismiss(id);
-			return deps.dismissed.getState().dismissedIds;
+			await deps.store.getState().dismiss(id);
+			return deps.store.getState().dismissedIds;
 		},
 
 		async dismissed() {
-			return deps.dismissed.getState().dismissedIds;
+			return deps.store.getState().dismissedIds;
 		},
 	});
 

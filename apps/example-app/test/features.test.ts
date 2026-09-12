@@ -122,6 +122,25 @@ describe("the todos feature", () => {
 		expect(response).toMatchObject({ ok: false, code: "COMMAND_FAILED" });
 	});
 
+	it("keeps a description on the todo, and stores an empty one when it is left out", async () => {
+		await resultOf(registry, "todos.list", { source: "network" });
+		await resultOf(registry, "todos.add", {
+			title: "Write the brief",
+			description: "Two pages, no more.",
+		});
+		const cached = (await resultOf(registry, "todos.add", { title: "Send it" })) as {
+			title: string;
+			description: string;
+		}[];
+
+		expect(cached).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ title: "Write the brief", description: "Two pages, no more." }),
+				expect.objectContaining({ title: "Send it", description: "" }),
+			]),
+		);
+	});
+
 	it("rejects an empty title before it reaches the API", async () => {
 		const response = await call(registry, "todos.add", { title: "" });
 		expect(response).toMatchObject({ ok: false, code: "INVALID_ARGS" });

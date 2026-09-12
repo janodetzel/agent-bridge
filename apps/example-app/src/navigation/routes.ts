@@ -2,12 +2,13 @@ import { z } from "zod";
 
 export type RootStackParamList = {
 	Home: undefined;
+	AddTodo: undefined;
 	Settings: undefined;
 	News: undefined;
 };
 
 /** Types do not exist at runtime, so the route names are repeated here. */
-export const RouteName = z.enum(["Home", "Settings", "News"]);
+export const RouteName = z.enum(["Home", "AddTodo", "Settings", "News"]);
 
 type Assert<T extends true> = T;
 

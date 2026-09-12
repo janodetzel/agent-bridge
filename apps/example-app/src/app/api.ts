@@ -10,6 +10,7 @@ const schema = buildSchema(`
 	type Todo {
 		id: ID!
 		title: String!
+		description: String!
 		done: Boolean!
 	}
 	type Article {
@@ -23,7 +24,7 @@ const schema = buildSchema(`
 		news: [Article!]!
 	}
 	type Mutation {
-		addTodo(title: String!): Todo!
+		addTodo(title: String!, description: String): Todo!
 		addTodos(titles: [String!]!): [Todo!]!
 		setTodoDone(id: ID!, done: Boolean!): Todo!
 		removeTodo(id: ID!): ID!
@@ -31,12 +32,17 @@ const schema = buildSchema(`
 	}
 `);
 
-type Row = { id: string; title: string; done: boolean };
+type Row = { id: string; title: string; description: string; done: boolean };
 
 let nextId = 3;
 const rows: Row[] = [
-	{ id: "1", title: "Wire up the bridge", done: true },
-	{ id: "2", title: "Drive the app from the CLI", done: false },
+	{
+		id: "1",
+		title: "Wire up the bridge",
+		description: "Metro serves the plugin; the app connects on reload.",
+		done: true,
+	},
+	{ id: "2", title: "Drive the app from the CLI", description: "", done: false },
 ];
 
 type ArticleRow = { id: string; title: string; summary: string; publishedAt: string };
@@ -73,15 +79,16 @@ const root = {
 
 	news: () => articles.map((article) => ({ ...article })),
 
-	addTodo: ({ title }: { title: string }) => {
-		const row = { id: String(nextId++), title, done: false };
+	addTodo: ({ title, description }: { title: string; description?: string | null }) => {
+		// The column is not nullable, so an omitted description is stored as "".
+		const row = { id: String(nextId++), title, description: description ?? "", done: false };
 		rows.push(row);
 		return { ...row };
 	},
 
 	addTodos: ({ titles }: { titles: string[] }) => {
 		return titles.map((title) => {
-			const row = { id: String(nextId++), title, done: false };
+			const row = { id: String(nextId++), title, description: "", done: false };
 			rows.push(row);
 			return { ...row };
 		});
