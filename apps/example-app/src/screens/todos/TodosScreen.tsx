@@ -9,9 +9,8 @@ import {
 	TextInput,
 	View,
 } from "react-native";
-
-import { todos } from "../../app/instances";
-import { TODOS, type Todo } from "./gql";
+import { type Todo, TODOS } from "../../features/todos";
+import { todosFeature } from "../../app/instances";
 
 export function TodosScreen() {
 	const { data, loading } = useQuery<{ todos: Todo[] }>(TODOS);
@@ -24,7 +23,7 @@ export function TodosScreen() {
 		if (!title.trim()) return;
 		setBusy(true);
 		try {
-			await todos.add({ title: title.trim() });
+			await todosFeature.add({ title: title.trim() });
 			setTitle("");
 		} finally {
 			setBusy(false);
@@ -58,7 +57,7 @@ export function TodosScreen() {
 					<View style={styles.row}>
 						<Pressable
 							style={styles.check}
-							onPress={() => void todos.setDone({ id: item.id, done: !item.done })}
+							onPress={() => void todosFeature.setDone({ id: item.id, done: !item.done })}
 						>
 							<Text style={styles.checkMark}>{item.done ? "☑" : "☐"}</Text>
 							<View style={styles.text}>
@@ -68,7 +67,7 @@ export function TodosScreen() {
 								)}
 							</View>
 						</Pressable>
-						<Pressable onPress={() => void todos.remove({ id: item.id })}>
+						<Pressable onPress={() => void todosFeature.remove({ id: item.id })}>
 							<Text style={styles.remove}>Delete</Text>
 						</Pressable>
 					</View>

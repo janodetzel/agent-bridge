@@ -1,9 +1,8 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-
-import { todos } from "../../app/instances";
-import type { RootStackParamList } from "../../navigation/routes";
+import { todosFeature } from "../../app/instances";
+import { type RootStackParamList } from "../../navigation/routes";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddTodo">;
 
@@ -25,7 +24,7 @@ export function AddTodoScreen({ navigation }: Props) {
 		setBusy(true);
 		setError(null);
 		try {
-			await todos.add({
+			await todosFeature.add({
 				title: title.trim(),
 				// Left out rather than sent as "", so the API decides what an absent
 				// description is and the screen does not encode it twice.

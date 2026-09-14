@@ -1,13 +1,13 @@
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useStore } from "zustand";
-
-import { settings, settingsStore } from "../../app/instances";
+import { profileFeature, settingsStore } from "../../app/instances";
+import { settingsStoreSelectors } from "../../features/profile/settings";
 
 export function SettingsScreen() {
 	// Reads come from the store the feature writes through; writes go through the
 	// feature, which is the same entry point the command calls.
-	const units = useStore(settingsStore, (s) => s.units);
-	const notifications = useStore(settingsStore, (s) => s.notifications);
+	const units = useStore(settingsStore, settingsStoreSelectors.units);
+	const notifications = useStore(settingsStore, settingsStoreSelectors.notifications);
 
 	return (
 		<View style={styles.screen}>
@@ -16,7 +16,7 @@ export function SettingsScreen() {
 				{(["km", "mi"] as const).map((option) => (
 					<Pressable
 						key={option}
-						onPress={() => void settings.setUnits({ units: option })}
+						onPress={() => void profileFeature.settings.setUnits({ units: option })}
 						style={[styles.choice, units === option && styles.choiceSelected]}
 					>
 						<Text style={[styles.choiceLabel, units === option && styles.choiceLabelSelected]}>
@@ -30,7 +30,9 @@ export function SettingsScreen() {
 				<Text style={styles.label}>Notifications</Text>
 				<Switch
 					value={notifications}
-					onValueChange={(value) => void settings.setNotifications({ notifications: value })}
+					onValueChange={(value) =>
+						void profileFeature.settings.setNotifications({ notifications: value })
+					}
 				/>
 			</View>
 		</View>

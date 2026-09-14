@@ -1,16 +1,14 @@
 import { useQuery } from "@apollo/client/react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useStore } from "zustand";
-
-import { dismissedNewsStore, news } from "../../app/instances";
-import { visibleArticles } from "./api";
-import { type Article, NEWS } from "./gql";
+import { type Article, dismissedNewsStoreSelectors, NEWS } from "../../features/news";
+import { dismissedNewsStore, newsFeature } from "../../app/instances";
 
 export function NewsScreen() {
 	const { data, loading } = useQuery<{ news: Article[] }>(NEWS);
 	// The screen combines the same two sources, with the same function, as news.list.
-	const dismissedIds = useStore(dismissedNewsStore, (s) => s.dismissedIds);
-	const articles = visibleArticles(data?.news ?? [], new Set(dismissedIds));
+	const dismissedIds = useStore(dismissedNewsStore, dismissedNewsStoreSelectors.dismissedIds);
+	const articles = newsFeature.visibleArticles(data?.news ?? [], dismissedIds);
 
 	return (
 		<View style={styles.screen}>
@@ -26,7 +24,7 @@ export function NewsScreen() {
 							<Text style={styles.title}>{item.title}</Text>
 							<Text style={styles.summary}>{item.summary}</Text>
 						</View>
-						<Pressable onPress={() => void news.dismiss({ id: item.id })}>
+						<Pressable onPress={() => void newsFeature.dismiss({ id: item.id })}>
 							<Text style={styles.dismiss}>Dismiss</Text>
 						</Pressable>
 					</View>
