@@ -1,23 +1,24 @@
 # app-commands
 
-A pnpm workspace holding two packages and a todo-list example app that uses both:
+A pnpm workspace holding one package and a todo-list example app that uses it:
 
-- `packages/app-commands` - published as `@janodetzel/app-commands`. Transport,
-  protocol, CLI, MCP server, web UI, the conformance suite, and the adapters. It
-  knows four things per command and nothing about how the app is built. The Expo
-  dev tools transport sits behind the `/expo` subpath.
-- `packages/feature-kit` - published as `@janodetzel/feature-kit`. An architecture
-  pattern: `defineFeature`, plus the ESLint and dependency-cruiser configs that
-  enforce the principles. It never imports app-commands at runtime.
-- `apps/example-app` - the example, built on both.
+- `packages/app-commands` - published as `@janodetzel/app-commands`. The
+  `command()` builder, transport, protocol, CLI, MCP server, web UI, the
+  conformance suite, the adapters, and the ESLint and dependency-cruiser rules that
+  enforce the principles in an app (`/eslint`, `/depcruise`). Its core knows four
+  things per command and nothing about how the app is built. The Expo dev tools
+  transport sits behind the `/expo` subpath. It used to share the workspace with
+  `@janodetzel/feature-kit`, which merged into it.
+- `apps/example-app` - the example, built on it.
 
 `docs/principles.md` is the source of truth: eleven principles, each with a
 mechanical check. Read it before changing a layer boundary or the protocol, and do
 not restate it elsewhere - link to it.
 
-The example app keeps logic and UI together in `src/features/<feature>/`, and
-`src/app/instances.ts` is the only file that creates instances and wires features
-to each other.
+The example app has three layers: logic in `src/features/<feature>/`, the UI in
+`src/screens/`, and the composition root in `src/app/`. Dependencies point from
+`app` and `screens` into `features`, never back. `src/app/instances.ts`
+is the only file that creates instances and wires features to each other.
 
 ## Skills
 
@@ -66,32 +67,44 @@ the file. Never edit a package `version` or push a release tag by hand; see
 This is the design's load-bearing wall. `pnpm depcruise` enforces it; when a rule
 blocks you, move the code, do not widen the rule.
 
-- `packages/app-commands/src/core` imports **nothing** - not zod, not a UI library,
-  not feature-kit. It knows `Command` and `Registry` and how to answer a request.
-- `packages/app-commands/src/adapters/<lib>` imports only `<lib>`, zod, and core.
-  zod is shared because core has no validation library, so every adapter describes
-  its arguments in zod and converts them in `adapters/zod.ts`.
-- `packages/feature-kit` may name `@janodetzel/app-commands` in an `import type` and
-  nowhere else. The runtime dependency runs the other way:
-  `app-commands/src/adapters/feature-kit` adapts it, like Apollo. depcruise catches a
-  relative import and a value import by package name; ESLint's
-  `@typescript-eslint/no-restricted-imports` with `allowTypeImports` catches the rest,
-  because a package-name import resolves into `build/`, which depcruise excludes.
+- `packages/app-commands/src/core` imports **nothing** - not zod, not a UI library.
+  It knows `Command` and `Registry` and how to answer a request.
+- `packages/app-commands/src/command` (`command()`, `featureCommands()`) imports only
+  core. It reads any Standard Schema through an interface it copies, so every
+  feature file can import it without pulling in a validation library.
+- `packages/app-commands/src/adapters/<lib>` imports only `<lib>`, zod, core, and
+  `src/command`. Every adapter builds its commands with `command()` and declares
+  their arguments in zod; there is no second way to define a command.
 
-In the app the boundaries are feature-kit's ESLint rules, matching on file names and
+In the app the boundaries are app-commands' ESLint rules (`app-commands/*`), matching on file names and
 resolved paths: `no-ui-in-logic`, `no-cross-feature-import`, `no-set-outside-store`,
-`no-ambient-io`, `require-rethrow`. A _logic file_ is `api.ts`, `store.ts`, `spec.ts`
-or `index.ts` directly inside a feature folder. The match is by name, so a
-`helpers.ts` slips through: put logic a command needs in one of the four, or widen
-`logicFiles` in the rule's options.
+`no-ambient-io`, `require-rethrow`. A _logic file_ is every file under `src/features/`,
+at any depth, except tests: screens live outside it, so nothing inside needs React.
+
+depcruise adds the direction: a feature never imports `app/`, `screens/` or
+`navigation/`, code outside a feature imports it through its `index.ts` barrel only
+(`features/news`, `features/profile/settings`), and a screen never imports the
+registry.
 
 ## Conventions
 
-- A feature is `spec.ts` (names, schemas, descriptions) plus `index.ts` (a
-  `createX(deps)` factory calling `defineFeature(...).create(handlers)`). The
-  handler signatures come from the spec, so the two cannot drift.
+- A feature's entry points live in `index.ts`: a `createX(deps)` factory returning a
+  plain object of commands, each
+  `command().input({ ... }).description("...").run(async (input) => ...)`. The
+  schema sits next to the handler, which infers its argument type from it. `.input`
+  takes a Standard Schema, an object of them, or a validator function.
+- Features compose by nesting and merging plain objects, like tRPC routers:
+  `{ ...a, ...b }` merges, `{ settings: settingsFeature }` nests and adds a segment
+  to the command name (`profile.settings.setUnits`). Do it in `instances.ts`.
 - Descriptions are part of the API, not documentation. Say what the command does
   _not_ do. Never generate one from a method name.
+- A feature is a folder: `feature.ts` (the `createXFeature` factory), `store.ts`,
+  `api.ts`, `gql.ts` as needed, and an `index.ts` barrel (`export *` is fine) that
+  is the only file anything outside the feature imports. A sub-feature is a nested
+  folder with its own barrel. Nothing in a feature imports React.
+- Screens read a store with `useStore(store, selectors.x)`: the selectors come from
+  the feature's barrel, the store instance from `instances.ts`. A hook that binds a
+  selector to an instance lives with the screens, not in the feature.
 - Screens and the registry import their instances from `src/app/instances.ts`, which
   creates the stores and the features and wires them. A feature never imports another
   feature; pass a getter or a delegate there instead, never a snapshot.
@@ -108,9 +121,10 @@ or `index.ts` directly inside a feature folder. The match is by name, so a
   `Date.now`, so a command and a test see the same time.
 - A command returns picked fields, not a whole store state: the state object carries
   its actions, and functions do not survive JSON.
-- `src/app/commands.ts` is the only place the two layers meet: `buildRegistry` merges
-  the slices that `featureCommands`, `apolloCommands` and `navigationCommands`
-  return. Build it at module scope.
+- `src/app/commands.ts` builds the registry: `buildRegistry` merges the slices that
+  `featureCommands({ todos: todosFeature, ... })`, `apolloCommands` and
+  `navigationCommands` return. The keys of the `featureCommands` object are the
+  namespaces. Build it at module scope.
 - `App.tsx` calls `useAppCommands(commandRegistry)` from
   `@janodetzel/app-commands/expo`. No Metro config and no special import path. The
   `/expo` entry is a no-op in production, which drops the hook and
@@ -119,9 +133,9 @@ or `index.ts` directly inside a feature folder. The match is by name, so a
   than exposure. Do not write a secret into a command description.
 - Keep the strings the release check greps for out of user-facing copy, or the check
   turns into noise people learn to ignore.
-- New feature with business logic? It gets a `spec.ts`, so it is reachable by
-  definition. If features ship without one, the agent loses its reach one feature
-  at a time.
+- New feature with business logic? Its entry points are `command()`s registered in
+  `featureCommands`, so it is reachable by definition. If features
+  ship plain methods instead, the agent loses its reach one feature at a time.
 - A screen cannot be handed a different store in a test, because there is no
   provider. Mock `../app/instances` when you need that.
 
@@ -138,8 +152,8 @@ The running app exposes its business logic through `pnpm app-commands`.
    the cache and hides the bug from every later `cache` read.
 5. Use `nav.navigate` to put the app on a screen for a UI check. Do not verify data
    with screenshots. Use the data commands.
-6. When you add a feature with business logic, declare its entry points in the
-   feature's `spec.ts`.
+6. When you add a feature with business logic, define its entry points with
+   `command()` in the feature's `index.ts`.
 7. Every store action and operation function must return a promise that resolves
    when the work is done. Never fire and forget.
 

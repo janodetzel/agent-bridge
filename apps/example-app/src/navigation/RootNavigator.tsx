@@ -1,10 +1,10 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Button, View } from "react-native";
 
-import { NewsScreen } from "../features/news/NewsScreen";
-import { AddTodoScreen } from "../features/todos/AddTodoScreen";
-import { SettingsScreen } from "../features/settings/SettingsScreen";
-import { TodosScreen } from "../features/todos/TodosScreen";
+import { NewsScreen } from "../screens/news/NewsScreen";
+import { AddTodoScreen } from "../screens/todos/AddTodoScreen";
+import { SettingsScreen } from "../screens/settings/SettingsScreen";
+import { TodosScreen } from "../screens/todos/TodosScreen";
 import { navigationRef } from "../app/instances";
 import type { RootStackParamList } from "./routes";
 

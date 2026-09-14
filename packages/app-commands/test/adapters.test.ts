@@ -1,12 +1,10 @@
 import { ApolloClient, ApolloLink, InMemoryCache, gql } from "@apollo/client";
 import { createNavigationContainerRef } from "@react-navigation/native";
-import { defineFeature, META, type AnyFeature, type Spec } from "@janodetzel/feature-kit";
 import { describe, expect, it } from "vitest";
 import { createStore } from "zustand/vanilla";
 import { z } from "zod";
 
 import { apolloCommands } from "../src/adapters/apollo";
-import { featureCommands } from "../src/adapters/feature-kit";
 import { navigationCommands, type NavigationRef } from "../src/adapters/react-navigation";
 import { zustandInspect } from "../src/adapters/zustand";
 import { buildRegistry, type Registry } from "../src/core/command";
@@ -27,111 +25,6 @@ const failed = (res: Response) => {
 	if (res.ok) throw new Error(`expected a failure, got ${JSON.stringify(res.result)}`);
 	return res;
 };
-
-describe("featureCommands", () => {
-	const echoSpec = {
-		echo: { args: z.object({ value: z.string().min(1) }), description: "Returns its argument." },
-	} satisfies Spec;
-
-	const echo = defineFeature("demo", echoSpec).create({
-		async echo({ value }) {
-			return { value };
-		},
-	});
-
-	it("keys a feature's commands as namespace.name", () => {
-		expect(Object.keys(featureCommands(echo))).toEqual(["demo.echo"]);
-	});
-
-	it("turns each spec entry into a command the bridge can run", async () => {
-		const res = await call(featureCommands(echo), "demo.echo", { value: "hi" });
-		expect(res).toMatchObject({ ok: true, result: { value: "hi" } });
-	});
-
-	it("validates through the spec's schema before the handler runs", async () => {
-		const res = failed(await call(featureCommands(echo), "demo.echo", { value: "" }));
-		expect(res.code).toBe("INVALID_ARGS");
-		expect(res.issues?.[0]).toMatchObject({ path: ["value"] });
-	});
-
-	it("throws on a duplicate key and names it", () => {
-		expect(() => featureCommands(echo, echo)).toThrow('duplicate command "demo.echo"');
-	});
-
-	it("throws on a missing handler and names it", () => {
-		// What a JavaScript caller, or a feature object assembled at runtime, can
-		// still produce. TypeScript catches it in a .ts file.
-		const broken = { [META]: { namespace: "demo", spec: echoSpec } } as AnyFeature;
-		expect(() => featureCommands(broken)).toThrow('missing handler for "demo.echo"');
-	});
-
-	it("does not reach a method the spec does not name", () => {
-		const feature = Object.assign(
-			{
-				async echo() {
-					return null;
-				},
-				async secret() {
-					return "should not be reachable";
-				},
-			},
-			{ [META]: { namespace: "demo", spec: echoSpec } },
-		) as AnyFeature;
-
-		expect(Object.keys(featureCommands(feature))).toEqual(["demo.echo"]);
-	});
-
-	it("collects a feature whose spec has keys named spec and namespace", async () => {
-		// The regression test for the symbol: a string key would have been shadowed
-		// by one of these, and the feature would have broken silently.
-		const colliding = {
-			spec: { args: z.object({}), description: "An entry point called spec." },
-			namespace: { args: z.object({}), description: "An entry point called namespace." },
-		} satisfies Spec;
-
-		const feature = defineFeature("collide", colliding).create({
-			async spec() {
-				return "the spec handler ran";
-			},
-			async namespace() {
-				return "the namespace handler ran";
-			},
-		});
-
-		const registry = featureCommands(feature);
-		expect(Object.keys(registry).sort()).toEqual(["collide.namespace", "collide.spec"]);
-		expect(await call(registry, "collide.spec")).toMatchObject({
-			ok: true,
-			result: "the spec handler ran",
-		});
-	});
-
-	it("describes an argument with a default as optional for the caller", async () => {
-		const feature = defineFeature("favorites", {
-			list: {
-				args: z.object({ source: z.enum(["cache", "network"]).default("cache") }),
-				description: "Lists favorites.",
-			},
-		}).create({
-			async list({ source }) {
-				return source;
-			},
-		});
-
-		const schema = featureCommands(feature)["favorites.list"]!.jsonSchema as {
-			required?: string[];
-			properties: Record<string, unknown>;
-		};
-		expect(schema.required).toBeUndefined();
-		expect(schema.properties.source).toMatchObject({ enum: ["cache", "network"] });
-
-		// And the default reaches the handler, which is what `io: "input"` is for.
-		expect(await call(featureCommands(feature), "favorites.list", {})).toMatchObject({
-			ok: true,
-			result: "cache",
-		});
-	});
-});
 
 describe("navigationCommands", () => {
 	const routes = z.enum(["Home", "Settings"]);

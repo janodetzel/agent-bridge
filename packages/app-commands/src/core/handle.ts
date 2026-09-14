@@ -56,10 +56,11 @@ export async function handleRequest(
 
 	let parsed;
 	try {
-		parsed = cmd.parse(req.args ?? {});
+		parsed = await cmd.parse(req.args ?? {});
 	} catch (e) {
-		// `parse` belongs to whoever built the command. A throwing one is a bug
-		// there, and saying so beats reporting it as a transport failure.
+		// `parse` belongs to whoever built the command. A throwing or rejecting
+		// one is a bug there, and saying so beats reporting it as a transport
+		// failure.
 		return fail(
 			envelope,
 			"COMMAND_FAILED",

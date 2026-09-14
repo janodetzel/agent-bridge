@@ -1,19 +1,17 @@
 import { ApolloClient, InMemoryCache } from "@apollo/client";
 import {
 	buildRegistry,
+	featureCommands,
 	handleRequest,
 	PROTOCOL_VERSION,
 	type Registry,
 } from "@janodetzel/app-commands";
-import { featureCommands } from "@janodetzel/app-commands/adapters/feature-kit";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { apiLink } from "../src/app/api";
-import { createNews } from "../src/features/news";
-import { createDismissedNewsStore } from "../src/features/news/store";
-import { createSettings } from "../src/features/settings";
-import { createSettingsStore } from "../src/features/settings/store";
-import { createTodos } from "../src/features/todos";
+import { apiLink } from "../src/server/server";
+import { createDismissedNewsStore, createNewsFeature } from "../src/features/news";
+import { createSettingsFeature, createSettingsStore } from "../src/features/profile/settings";
+import { createTodosFeature } from "../src/features/todos";
 
 /**
  * The layer between the wire and the features, and the only thing a feature test
@@ -39,14 +37,14 @@ describe("the registry the app builds", () => {
 	beforeEach(() => {
 		const client = new ApolloClient({ link: apiLink, cache: new InMemoryCache() });
 		registry = buildRegistry(
-			featureCommands(
-				createTodos({ apollo: client }),
-				createNews({
+			featureCommands({
+				todos: createTodosFeature({ apollo: client }),
+				news: createNewsFeature({
 					apollo: client,
 					store: createDismissedNewsStore({ storage: nullStorage<string[]>() }),
 				}),
-				createSettings({ store: createSettingsStore({ storage: nullStorage() }) }),
-			),
+				settings: createSettingsFeature({ store: createSettingsStore({ storage: nullStorage() }) }),
+			}),
 		);
 	});
 

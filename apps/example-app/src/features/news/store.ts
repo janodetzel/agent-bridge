@@ -42,3 +42,8 @@ export const createDismissedNewsStore = (deps: DismissedNewsDeps) =>
 	}));
 
 export type DismissedNewsStore = ReturnType<typeof createDismissedNewsStore>;
+
+/** What the screen subscribes to. Commands read `getState()` and pick the same fields. */
+export const dismissedNewsStoreSelectors = {
+	dismissedIds: (s: DismissedNewsState) => s.dismissedIds,
+};

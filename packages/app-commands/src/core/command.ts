@@ -19,14 +19,14 @@ export type Command = {
 	 * Returns parsed arguments or the issues that stopped them. app-commands
 	 * never validates: keeping `parse` a function rather than a schema object is
 	 * what keeps every validation library out of this package's dependencies, so
-	 * a Valibot or ArkType app is not forced to install zod. One built on a
-	 * Standard Schema `~standard.validate` is a few lines.
+	 * a Valibot or ArkType app is not forced to install zod. It may return a
+	 * promise, because a Standard Schema `~standard.validate` may.
 	 */
-	parse: (input: unknown) => ParseResult;
+	parse: (input: unknown) => ParseResult | Promise<ParseResult>;
 	run: (args: unknown) => Promise<unknown>;
 };
 
-/** Commands keyed as `<namespace>.<name>`. */
+/** Commands keyed as `<namespace>.<name>`, with more segments for a nested feature. */
 export type Registry = Record<string, Command>;
 
 /**

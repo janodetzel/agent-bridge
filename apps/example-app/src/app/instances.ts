@@ -1,14 +1,16 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ApolloClient, InMemoryCache } from "@apollo/client";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createNavigationContainerRef } from "@react-navigation/native";
-
-import { createNews } from "../features/news";
-import { createDismissedNewsStore } from "../features/news/store";
-import { createSettings } from "../features/settings";
-import { createSettingsStore, type SettingsState } from "../features/settings/store";
-import { createTodos } from "../features/todos";
+import { createDismissedNewsStore, createNewsFeature } from "../features/news";
+import { createProfileFeature } from "../features/profile";
+import {
+	createSettingsFeature,
+	createSettingsStore,
+	type SettingsState,
+} from "../features/profile/settings";
+import { createTodosFeature } from "../features/todos";
 import type { RootStackParamList } from "../navigation/routes";
-import { apiLink } from "./api";
+import { apiLink } from "../server/server";
 
 /**
  * The only file that creates instances, and the only file that wires features to
@@ -50,9 +52,16 @@ export const navigationRef = createNavigationContainerRef<RootStackParamList>();
  * feature that needed a value from a neighbour would take a getter here, never
  * a snapshot, so the port cannot go stale.
  */
-export const todos = createTodos({ apollo: apolloClient });
-export const settings = createSettings({ store: settingsStore });
-export const news = createNews({ apollo: apolloClient, store: dismissedNewsStore });
+export const todosFeature = createTodosFeature({ apollo: apolloClient });
+export const newsFeature = createNewsFeature({ apollo: apolloClient, store: dismissedNewsStore });
+
+/**
+ * A feature composed of another: profile nests the settings feature and adds
+ * commands on top of it.
+ */
+export const profileFeature = createProfileFeature({
+	settingsFeature: createSettingsFeature({ store: settingsStore }),
+});
 
 const SETTINGS_KEY = "settings";
 const DISMISSED_NEWS_KEY = "news.dismissedIds";

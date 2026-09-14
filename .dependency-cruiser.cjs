@@ -1,37 +1,36 @@
 /**
- * Keeps the two packages apart, and keeps app-commands' core free of everything.
+ * Keeps app-commands' core free of everything.
  *
  * - `app-commands/src/core` imports nothing. Not zod, not a UI library, not the
  *   feature layer. That is what lets it run against an app built on Redux,
  *   XState, MobX, or plain service classes. That is principle 10.
+ * - `app-commands/src/command`, the `command()` builder, imports core and
+ *   nothing else. It reads any Standard Schema through a copied interface, so
+ *   it names no validation library either.
  * - `app-commands/src/adapters/<lib>` may use only its own library and core.
- * - `feature-kit` imports app-commands types only. The dependency runs the other
- *   way at runtime: an adapter binds the two.
  *
- * The example app's own boundaries are mostly feature-kit's ESLint rules, because
+ * The example app's own boundaries are mostly app-commands' ESLint rules, because
  * they are about file names rather than package edges. The one exception is the
- * sibling-feature rule, which feature-kit ships for dependency-cruiser as well:
+ * sibling-feature rule, which app-commands ships for dependency-cruiser as well:
  * a deep relative import between features is a package edge, and belongs here.
  */
 // Rules match the resolved path of a dependency, which for an npm package is the
 // file inside node_modules. Matching on the path rather than on dependency-cruiser's
 // dependency types is deliberate: an import of a package the importer does not
 // declare has no type to match, and that is exactly the import worth catching.
-const featureKit = require("@janodetzel/feature-kit/depcruise");
+const appCommands = require("@janodetzel/app-commands/depcruise");
 
 const inNodeModules = (...packages) => packages.map((p) => `(^|/)node_modules/${p}/`);
 
-// The adapter layer's shared schema language. Core has no validation library, so
-// every adapter describes its arguments in zod and converts them in adapters/zod.ts.
-// This is the one dependency all of them may have.
+// The built-in adapters' shared schema language. They declare their arguments in
+// zod and build their commands with command(), which reads zod as a Standard
+// Schema. This is the one dependency all of them may have.
 const SHARED = inNodeModules("zod");
 
 const ADAPTER_LIBRARIES = {
 	"react-navigation": inNodeModules("@react-navigation/[^/]+"),
 	apollo: inNodeModules("@apollo/client"),
 	zustand: inNodeModules("zustand"),
-	"feature-kit": inNodeModules("@janodetzel/feature-kit"),
-	zod: [],
 };
 
 /** One rule per adapter: its own library, plus zod, and nothing else. */
@@ -46,7 +45,15 @@ const adapterRules = Object.entries(ADAPTER_LIBRARIES).map(([adapter, allowed]) 
 
 module.exports = {
 	forbidden: [
-		...featureKit.rules(),
+		...appCommands.rules(),
+		{
+			name: "screens-do-not-import-the-registry",
+			comment:
+				"A screen calls a feature, the same function a command calls. Reaching for the registry would make the UI a client of the bridge instead of a peer of it.",
+			severity: "error",
+			from: { path: "^apps/[^/]+/src/screens/" },
+			to: { path: "^apps/[^/]+/src/app/commands" },
+		},
 		{
 			name: "core-imports-nothing",
 			comment:
@@ -61,18 +68,17 @@ module.exports = {
 			from: { path: "^packages/app-commands/src/core" },
 			to: { path: "^packages/app-commands/src/(expo|adapters)" },
 		},
-		...adapterRules,
 		{
-			name: "feature-kit-imports-app-commands-types-only",
+			name: "command-imports-only-core",
 			comment:
-				"feature-kit may import app-commands types, and nothing else from it - principle 10 is only worth something if the core can be replaced without the feature layer following. A value import means the two halves are welded together. `tsPreCompilationDeps` keeps type-only imports in the graph, so `dependencyTypesNot` is what lets them through while a runtime import still fails.",
+				"packages/app-commands/src/command is what every feature file imports, so it ships in every app. It reads schemas through the Standard Schema interface it copies, and imports core and nothing else - no validation library, no transport, no adapter. An app on Valibot must not install zod to define a command.",
 			severity: "error",
-			from: { path: "^packages/feature-kit" },
+			from: { path: "^packages/app-commands/src/command" },
 			to: {
-				path: ["^packages/app-commands", ...inNodeModules("@janodetzel/app-commands")],
-				dependencyTypesNot: ["type-only"],
+				path: ["(^|/)node_modules/", "^packages/app-commands/src/(expo|adapters|conformance)"],
 			},
 		},
+		...adapterRules,
 		{
 			name: "no-unresolvable",
 			comment:

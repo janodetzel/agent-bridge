@@ -1,8 +1,9 @@
 import type { StoreApi } from "zustand";
 import { z } from "zod";
 
+import { command } from "../command/builder";
+import { featureCommands } from "../command/tree";
 import type { Registry } from "../core/command";
-import { zodCommands } from "./zod";
 
 export type ZustandInspectOptions = { namespace?: string };
 
@@ -18,11 +19,14 @@ export function zustandInspect(
 	const names = Object.keys(stores);
 	if (names.length === 0) throw new Error("zustandInspect needs at least one store");
 
-	return zodCommands(opts.namespace ?? "store", {
-		get: {
-			args: z.object({ store: z.enum(names as [string, ...string[]]) }),
-			description: `Returns the state of one store, without its actions. Stores: ${names.join(", ")}.`,
-			run: async ({ store }) => withoutFunctions(stores[store]!.getState()),
+	return featureCommands({
+		[opts.namespace ?? "store"]: {
+			get: command()
+				.input({ store: z.enum(names as [string, ...string[]]) })
+				.description(
+					`Returns the state of one store, without its actions. Stores: ${names.join(", ")}.`,
+				)
+				.run(async ({ store }) => withoutFunctions(stores[store]!.getState())),
 		},
 	});
 }

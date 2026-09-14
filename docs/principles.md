@@ -48,7 +48,7 @@ Two payoffs. Logic becomes testable without a simulator, which is the preconditi
 
 ## 7. Features own a slice and never import a sibling
 
-A feature owns its logic, its commands, and its screens. It reaches another feature only through a narrow port it was given, and announces events only through delegates it declares. All wiring happens at the composition root.
+A feature owns its logic and its commands; screens are clients of it, like the command registry. It reaches another feature only through a narrow port it was given, and announces events only through delegates it declares. All wiring happens at the composition root.
 
 A namespace in the command surface is a feature boundary made visible. Once features reach into each other, namespaces stop describing the app, and the command surface stops being a map of it.
 
@@ -74,16 +74,16 @@ A running app on a simulator is one transport. A headless process, a test harnes
 
 A guideline nobody can point to in a review is a preference. Each principle above maps to something that fails a build:
 
-| Principle | Check                                                                                                                                |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 2, 5      | A test builds the registry and asserts it uses the shared instances                                                                  |
-| 3         | `no-floating-promises` as an error in logic files                                                                                    |
-| 4         | Lint forbids store mutation outside store files                                                                                      |
-| 6         | Lint forbids `Date.now`, `new Date()` without arguments, and `Math.random` in logic files                                            |
-| 7         | dependency-cruiser forbids imports between sibling feature folders                                                                   |
-| 8         | A conformance test asserts every description is non-empty and longer than its command name                                           |
-| 10        | dependency-cruiser forbids UI, state, and validation libraries in the core; a test drives `handleRequest` with a hand-built registry |
-| All       | A release bundle contains no trace of the command transport                                                                          |
+| Principle | Check                                                                                                                                                   |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2, 5      | A test builds the registry and asserts it uses the shared instances                                                                                     |
+| 3         | `no-floating-promises` as an error in logic files                                                                                                       |
+| 4         | Lint forbids store mutation outside store files                                                                                                         |
+| 6         | Lint forbids `Date.now`, `new Date()` without arguments, and `Math.random` in logic files                                                               |
+| 7         | dependency-cruiser forbids imports between sibling feature folders, deep imports past a feature's barrel, and a feature importing the app               |
+| 8         | A conformance test asserts every description is non-empty and longer than its command name                                                              |
+| 10        | dependency-cruiser forbids UI, state, and validation libraries in the core and in `command()`; a test drives `handleRequest` with a hand-built registry |
+| All       | A release bundle contains no trace of the command transport                                                                                             |
 
 Principle 1 has no mechanical check, and that is worth admitting. Nothing can prove a button has a command equivalent. It stays a review habit, which means it is the principle most likely to erode.
 

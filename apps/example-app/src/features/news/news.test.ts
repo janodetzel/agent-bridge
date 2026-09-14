@@ -1,8 +1,8 @@
 import { ApolloClient, InMemoryCache } from "@apollo/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { apiLink } from "../../app/api";
-import { createNews } from ".";
+import { apiLink } from "../../server/server";
+import { createNewsFeature } from ".";
 import { createDismissedNewsStore } from "./store";
 
 /**
@@ -27,10 +27,10 @@ const memoryDismissedStorage = () => {
 const freshApollo = () => new ApolloClient({ link: apiLink, cache: new InMemoryCache() });
 
 describe("the news feature", () => {
-	let news: ReturnType<typeof createNews>;
+	let news: ReturnType<typeof createNewsFeature>;
 
 	beforeEach(() => {
-		news = createNews({
+		news = createNewsFeature({
 			apollo: freshApollo(),
 			store: createDismissedNewsStore({ storage: memoryDismissedStorage() }),
 		});
@@ -50,7 +50,7 @@ describe("the news feature", () => {
 	it("saves the dismissal, so a fresh store reads it back", async () => {
 		const storage = memoryDismissedStorage();
 		const store = createDismissedNewsStore({ storage });
-		const feature = createNews({ apollo: freshApollo(), store });
+		const feature = createNewsFeature({ apollo: freshApollo(), store });
 
 		const before = await feature.list({ source: "network" });
 		await feature.dismiss({ id: before[0]!.id });
@@ -69,7 +69,7 @@ describe("the news feature", () => {
 				},
 			},
 		});
-		const feature = createNews({ apollo: freshApollo(), store });
+		const feature = createNewsFeature({ apollo: freshApollo(), store });
 
 		await expect(feature.dismiss({ id: "a1" })).rejects.toThrow("disk full");
 		expect(store.getState().dismissedIds).toEqual([]);

@@ -62,7 +62,7 @@ export async function checkRegistry(
 
 		// `parse` is the command's only guard. One that accepts anything hands
 		// unvalidated input to the handler and reports a type error as a crash.
-		const rejected = command.parse(WRONG_INPUT);
+		const rejected = await command.parse(WRONG_INPUT);
 		if (rejected.ok) {
 			report(name, "accepts a deliberately wrong input instead of rejecting it");
 		} else if (!Array.isArray(rejected.issues) || rejected.issues.length === 0) {
@@ -82,8 +82,11 @@ export async function checkRegistry(
 	return problems;
 }
 
-/** Commands are addressed as `<namespace>.<name>`; the namespace is the feature. */
-const NAME_PATTERN = /^[a-z][a-zA-Z0-9]*\.[a-z][a-zA-Z0-9]*$/;
+/**
+ * Commands are addressed as `<namespace>.<name>`; the namespace is the feature.
+ * A feature nested inside another adds a segment: `profile.settings.setUnits`.
+ */
+const NAME_PATTERN = /^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
 
 /**
  * Deliberately wrong for every plausible schema: an argument object is expected,

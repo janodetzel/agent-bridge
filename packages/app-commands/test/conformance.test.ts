@@ -62,12 +62,25 @@ describe("checkRegistry", () => {
 	});
 
 	it("catches a namespace no feature could have declared", async () => {
-		// `defineFeature` enforces /^[a-z][a-zA-Z0-9]*$/. A registry slice built by
-		// hand has no such guard, so the two paths could otherwise disagree about
-		// what a namespace is.
+		// `featureCommands` enforces /^[a-z][a-zA-Z0-9]*$/ per segment. A registry
+		// slice built by hand has no such guard, so the two paths could otherwise
+		// disagree about what a namespace is.
 		const found = await problems({ "example-command.inout": ok() });
 		expect(found).toHaveLength(1);
 		expect(found[0]!.problem).toContain("<namespace>.<name>");
+	});
+
+	it("accepts a nested feature's name, and still wants a namespace", async () => {
+		expect(await problems({ "profile.settings.setUnits": ok() })).toEqual([]);
+		const found = await problems({ setUnits: ok() });
+		expect(found[0]!.problem).toContain("<namespace>.<name>");
+	});
+
+	it("awaits a parse that returns a promise", async () => {
+		const found = await problems({
+			"todos.add": ok({ parse: async (input) => ({ ok: true, value: input }) }),
+		});
+		expect(found[0]!.problem).toContain("accepts a deliberately wrong input");
 	});
 
 	it("catches a result the wire cannot carry", async () => {
