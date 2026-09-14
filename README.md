@@ -17,33 +17,28 @@ We call an app built this way _agent-addressable_. [`docs/principles.md`](docs/p
 
 The central idea is old. A screen is one client of the application. A command is another. Neither owns the behavior.
 
-A feature declares its entry points once, with an argument schema and a description:
-
-```ts
-// features/todos/spec.ts
-export const todosSpec = {
-	add: {
-		args: z.object({ title: z.string().min(1) }),
-		description:
-			"Adds a todo through the API, updates the cache the way the screen does, and returns the todos from the cache. A repeated title adds a second todo.",
-	},
-} as const satisfies Spec;
-```
-
-The implementation is typed from the spec, so the two cannot drift:
+A feature declares each entry point once: its argument schema, its description, and its implementation, side by side:
 
 ```ts
 // features/todos/index.ts
-export const createTodos = (deps: TodosDeps) =>
-	defineFeature("todos", todosSpec).create({
-		async add({ title }) {
+import { command } from "@janodetzel/app-commands";
+
+export const createTodos = (deps: TodosDeps) => ({
+	add: command()
+		.input({ title: z.string().min(1) })
+		.description(
+			"Adds a todo through the API, updates the cache the way the screen does, and returns the todos from the cache. A repeated title adds a second todo.",
+		)
+		.run(async ({ title }) => {
 			await addTodo(deps.apollo, title);
 			return getTodos(deps.apollo, "cache");
-		},
-	});
+		}),
+});
 ```
 
-The screen calls `todos.add({ title })`. The command `todos.add` calls the same method. There is no second implementation for the agent, so the agent cannot report success for behavior that users never see.
+The handler's argument type comes from the schema, so the two cannot drift. `.input` takes any [Standard Schema](https://standardschema.dev) (zod, Valibot, ArkType), an object of them, or a validator function. Features compose like tRPC routers: nest one inside another, or spread two into one namespace.
+
+The screen calls `todosFeature.add({ title })`. The command `todos.add` is that same function, with the same validation. There is no second implementation for the agent, so the agent cannot report success for behavior that users never see.
 
 The rest of the principles protect that one property. An entry point returns a promise that settles when the work is done, or the command reports success before the save runs. State lives outside the component tree, or a command has nothing to read when no screen is mounted. One file creates every instance, or a command eventually talks to a different client than the UI.
 
@@ -67,27 +62,23 @@ The principles are constraints, not a framework. They name no state library, nav
 
 ## What the packages add
 
-The packages make the principles cheap to follow and expensive to break. They are separate on purpose, and the runtime dependency runs one way.
+The package makes the principles cheap to follow and expensive to break.
 
-| Package                                             | What it is                                                                                                                                                                                                                      |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@janodetzel/app-commands`](packages/app-commands) | The command contract, `handleRequest`, the wire protocol, the `app-commands` CLI, an MCP server, a web console, and adapters for feature-kit, Apollo, React Navigation, Zustand, and zod. The Expo transport is behind `/expo`. |
-| [`@janodetzel/feature-kit`](packages/feature-kit)   | `defineFeature`, five ESLint rules, and a dependency-cruiser rule that keep a feature callable from outside React. It never imports app-commands at runtime.                                                                    |
+[`@janodetzel/app-commands`](packages/app-commands) holds the command contract, `command()` and `featureCommands()`, `handleRequest`, the wire protocol, the `app-commands` CLI, an MCP server, a web console, adapters for Apollo, React Navigation, and Zustand, and the ESLint and dependency-cruiser rules that enforce the principles. The Expo transport is behind `/expo`.
 
-The core of app-commands knows four things about a command: a description, a JSON Schema, a `parse` function, and a `run` function. It imports nothing, so it works with an app built on Redux, XState, MobX, or plain service classes. feature-kit is one way to produce those four things, and `app-commands/adapters/feature-kit` joins the two.
+The core of app-commands knows four things about a command: a description, a JSON Schema, a `parse` function, and a `run` function. It imports nothing, so it works with an app built on Redux, XState, MobX, or plain service classes. `command()` is one way to produce those four things, from any Standard Schema; an adapter is another.
 
-The mechanical checks from principle 11 live in these packages. For example, `no-floating-promises` catches a fire-and-forget call, `no-ambient-io` catches `Date.now` in a logic file, `no-cross-feature-import` catches one feature reaching into another, and a conformance test fails on an empty description.
+The mechanical checks from principle 11 live in the package too. For example, `no-floating-promises` catches a fire-and-forget call, `no-ambient-io` catches `Date.now` in a logic file, `no-cross-feature-import` catches one feature reaching into another, and a conformance test fails on an empty description.
 
 ## The workspace
 
-This is a pnpm workspace with the two packages and an example app that uses both:
+This is a pnpm workspace with the package and an example app that uses it:
 
 ```
 packages/
 	app-commands/    @janodetzel/app-commands
-	feature-kit/     @janodetzel/feature-kit
 apps/
-	example-app/     an Expo todo list built on both packages
+	example-app/     an Expo todo list built on it
 docs/
 	principles.md    the eleven principles and their checks
 ```
@@ -100,11 +91,13 @@ apps/example-app/src/
 		instances.ts    the only file that creates stores, the Apollo client, and the navigation ref
 		commands.ts     the registry, where features and adapters meet
 		App.tsx         calls useAppCommands(commandRegistry)
-		api.ts          a stand-in backend, so the example runs offline
-	features/
-		todos/          spec.ts, index.ts, api.ts, and the screens
-		settings/       spec.ts, index.ts, store.ts, and the screen
-		news/           spec.ts, index.ts, api.ts, store.ts, and the screen
+	features/         logic only, each imported through its index.ts barrel
+		todos/          feature.ts, api.ts, gql.ts
+		news/           feature.ts, api.ts, gql.ts, store.ts
+		profile/        feature.ts, nesting settings/: feature.ts, store.ts
+	screens/          the UI, a client of the features like the command registry
+	navigation/       the navigator and the route names
+	server/           a stand-in backend, so the example runs offline
 ```
 
 ## Run the example
@@ -142,15 +135,16 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm depcruise
 | Command                                          | What it checks                                                      |
 | ------------------------------------------------ | ------------------------------------------------------------------- |
 | `pnpm typecheck`                                 | `tsc --noEmit` in every package                                     |
-| `pnpm lint`                                      | ESLint, including the feature-kit rules                             |
+| `pnpm lint`                                      | ESLint, including the app-commands architecture rules               |
 | `pnpm test`                                      | Builds the packages, then runs the Vitest suites                    |
 | `pnpm depcruise`                                 | The layer boundaries between core, adapters, packages, and features |
 | `pnpm --filter example-app check:release-bundle` | That no trace of the command transport reaches a release bundle     |
 
 ## Releasing
 
-`@janodetzel/app-commands` and `@janodetzel/feature-kit` are published to GitHub
-Packages, and each has its own version. Never edit a `version` field or push a tag
+`@janodetzel/app-commands` is published to GitHub Packages.
+`@janodetzel/feature-kit` was published from here until it merged into app-commands; its last
+version stays installable. Never edit a `version` field or push a tag
 by hand; [Changesets](https://github.com/changesets/changesets) does both.
 
 1. In a pull request that changes a published package, run `pnpm changeset`. Pick the
@@ -163,13 +157,12 @@ by hand; [Changesets](https://github.com/changesets/changesets) does both.
    since the last release.
 3. Merge "Version Packages" when you want to release. The workflow publishes every
    package whose new version is not in the registry yet, then pushes a tag such as
-   `@janodetzel/feature-kit@0.2.0` and creates a GitHub release for it.
+   `@janodetzel/app-commands@0.2.0` and creates a GitHub release for it.
 
 Run `pnpm changeset status` to see what the next release would bump.
 
 ## Further reading
 
 - [`docs/principles.md`](docs/principles.md) explains each principle and what it does not claim.
-- [`packages/app-commands/README.md`](packages/app-commands/README.md) covers the command contract, the CLI and its exit codes, the MCP server, the adapters, and release builds.
-- [`packages/feature-kit/README.md`](packages/feature-kit/README.md) covers `defineFeature` and the lint rules.
-- [`CLAUDE.md`](CLAUDE.md) tells an agent how to work in this repo. The skills in `packages/app-commands/skills` and `packages/feature-kit/skills` hold the longer instructions.
+- [`packages/app-commands/README.md`](packages/app-commands/README.md) covers the command contract, the CLI and its exit codes, the MCP server, the adapters, the lint rules, and release builds.
+- [`CLAUDE.md`](CLAUDE.md) tells an agent how to work in this repo. The skills in `packages/app-commands/skills` hold the longer instructions.

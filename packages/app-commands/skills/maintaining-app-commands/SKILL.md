@@ -8,9 +8,12 @@ description: Work on the app-commands package itself - the core protocol, the ap
 ```
 packages/app-commands/
 	src/core/       protocol, Command/Registry, handleRequest, toJsonSafe - imports NOTHING
+	src/command/    command(), featureCommands(), a copied Standard Schema interface - imports only core
 	src/expo/       useAppCommands, and the transport-agnostic attach()
 	src/adapters/   one file per library, each importing only that library, zod, and core
 	src/index.ts    the production no-op
+	eslint/         the app-commands/* architecture rules, a flat-config plugin (plain .mjs, not built)
+	depcruise/      rules(), the sibling-feature boundary for an app's dependency-cruiser config
 	cli/            client, flags, entry point
 	cli/wire/       copied from Expo - see SOURCE.md
 	mcp/            the MCP server, over cli/client.ts
@@ -21,9 +24,16 @@ packages/app-commands/
 a description, a JSON Schema, a `parse` function and a `run` function, so the bridge
 works against an app built on Redux, XState, MobX or plain service classes - and
 against Valibot or ArkType, because `parse` is a function rather than a schema
-object. zod lives in the adapter layer, where `adapters/zod.ts` is the single place
-a schema becomes `jsonSchema` + `parse`. `packages/feature-kit` is a separate package
-that never imports this one; `src/adapters/feature-kit.ts` adapts it, like Apollo.
+object. `parse` may return a promise; `handleRequest` and `checkRegistry` await it.
+
+`src/command` is what every feature file imports, so it ships in every app. It turns
+a Standard Schema, an object of them, or a validator function into `jsonSchema` +
+`parse`, reading `~standard.validate` and the optional `~standard.jsonSchema`
+extension. It never imports a validation library; the depcruise rule
+`command-imports-only-core` holds that. The built-in adapters use `command()` too,
+with zod schemas, so zod is a dependency of the adapter layer only. zod added the
+`~standard.jsonSchema` extension in 4.2.0, which is why the peer range starts
+there: an older zod still validates, but every command lists with no arguments.
 
 `pnpm depcruise` enforces the layers. The rules match resolved paths under
 `node_modules`, not dependency-cruiser's dependency types, because an import of a
@@ -41,7 +51,7 @@ mismatch in practice means a stale build or a stale app - say so rather than add
 compatibility shims.
 
 `handleRequest` takes a registry and a request and nothing else. It calls `parse`,
-then `run`, then serializes; it has no notion of a feature, a namespace or a spec.
+then `run`, then serializes; it has no notion of a feature, a namespace or a schema library.
 Keep it that way: the app hook, the tests, and the fake app peer all share that one
 code path, which is why the tests are worth anything.
 
@@ -53,10 +63,10 @@ change even though nothing in `src/` would fail to compile.
 
 One factory returning a `Registry` slice with its keys already namespaced, in
 `src/adapters/<lib>.ts`, plus an entry in the `exports` map pointing at
-`./build/adapters/<lib>.js`. Build the slice with `zodCommands(namespace, {...})`
-from `adapters/zod.ts`: it infers a schema per entry and checks that entry's handler
-against it, so a handler destructuring a field its schema does not declare is a
-compile error.
+`./build/adapters/<lib>.js`. Build the slice with
+`featureCommands({ [opts.namespace ?? "lib"]: { name: command()... } })`, the same
+way an app defines a feature, so a handler destructuring a field its schema does not
+declare is a compile error. A namespace option must be camelCase, like any segment.
 
 Take a `namespace` option, defaulting to something short, for an app that already
 uses the name. The library goes in `peerDependenciesMeta` as optional and in
@@ -145,10 +155,13 @@ only teach people to ignore a failing check.
 
 - `test/core.test.ts` - the handler, every error code, serialization. Every registry
   in it is built by hand, with a literal JSON Schema and a plain `parse`. That is
-  the point: if it ever needs zod or feature-kit to express itself, the layering has
+  the point: if it ever needs zod or `command()` to express itself, the layering has
   leaked and the bridge has stopped being agnostic.
-- `test/adapters.test.ts` - real library instances through `handleRequest`, including
-  the feature-kit adapter's duplicate, missing-handler and symbol-collision cases.
+- `test/command.test.ts` - `command()` and `featureCommands()`: every input form
+  (zod, a hand-written Standard Schema with no JSON Schema, an async one, a shape, a
+  validator function, none), direct calls, tree naming and its errors, and the type
+  inference, with `expectTypeOf` and `@ts-expect-error`.
+- `test/adapters.test.ts` - real library instances through `handleRequest`.
 - `test/cli.integration.test.ts` - the built binary against `test/fake-broadcaster.ts`,
   a local copy of Metro's endpoint plus a fake app peer. It covers every exit code.
 - `test/mcp.integration.test.ts` - the built MCP binary against the same broadcaster,
