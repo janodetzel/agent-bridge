@@ -7,7 +7,7 @@ import { toJsonSafe } from "../src/core/serialize";
 
 /**
  * Every registry here is built by hand: a literal JSON Schema and a plain
- * `parse` function, with no zod and nothing from feature-kit.
+ * `parse` function, with no zod and nothing from `command()`.
  *
  * That is the point of the file. app-commands is supposed to know four things
  * per command and nothing about where they came from, so if this test ever
@@ -177,6 +177,27 @@ describe("handleRequest", () => {
 			expect(res.code).toBe("COMMAND_FAILED");
 			expect(res.error).toContain("parse function");
 			expect(res.error).toContain("schema is broken");
+		});
+
+		it("awaits a parse that returns a promise", async () => {
+			// A Standard Schema may validate asynchronously.
+			const registry = single("async", {
+				parse: async () => ({ ok: false, issues: [{ message: "checked later" }] }),
+			});
+			const res = failed(await run(registry, { cmd: "run", command: "demo.async" }));
+			expect(res.code).toBe("INVALID_ARGS");
+			expect(res.issues).toEqual([{ message: "checked later" }]);
+		});
+
+		it("reports a rejecting parse the way it reports a throwing one", async () => {
+			const registry = single("rejects", {
+				parse: async () => {
+					throw new Error("schema is broken");
+				},
+			});
+			const res = failed(await run(registry, { cmd: "run", command: "demo.rejects" }));
+			expect(res.code).toBe("COMMAND_FAILED");
+			expect(res.error).toContain("parse function");
 		});
 
 		it("TIMEOUT, without waiting for the command", async () => {
