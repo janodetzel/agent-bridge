@@ -1,7 +1,7 @@
 {
 	"name": "@janodetzel/app-commands",
 	"version": "0.1.1",
-	"description": "Run typed commands against a running app from a CLI, an MCP server, or the Metro dev tools. Knows no UI framework.",
+	"description": "Run typed commands against a running app from a CLI, an MCP server, or the Metro dev tools, and keep the app's features reachable with lint and dependency-cruiser rules. Knows no UI framework.",
 	"author": "Jano Detzel <jano@janodetzel.com>",
 	"homepage": "https://github.com/janodetzel/app-commands#readme",
 	"repository": {
@@ -37,6 +37,8 @@
 	"files": [
 		"build",
 		"dist",
+		"eslint",
+		"depcruise",
 		"expo-module.config.json"
 	],
 	"license": "MIT",
@@ -46,7 +48,6 @@
 	},
 	"devDependencies": {
 		"@apollo/client": "^4.3.0",
-		"@janodetzel/feature-kit": "workspace:*",
 		"@react-navigation/native": "^7.3.18",
 		"@types/react": "~19.2.2",
 		"@types/ws": "^8.18.1",
@@ -62,8 +63,7 @@
 	"peerDependencies": {
 		"expo": ">=53.0.0",
 		"react": "*",
-		"zod": "^4.0.0",
-		"@janodetzel/feature-kit": "*"
+		"zod": "^4.2.0"
 	},
 	"exports": {
 		".": {
@@ -86,21 +86,20 @@
 			"types": "./build/adapters/apollo.d.ts",
 			"default": "./build/adapters/apollo.js"
 		},
-		"./adapters/feature-kit": {
-			"types": "./build/adapters/feature-kit.d.ts",
-			"default": "./build/adapters/feature-kit.js"
-		},
 		"./adapters/react-navigation": {
 			"types": "./build/adapters/react-navigation.d.ts",
 			"default": "./build/adapters/react-navigation.js"
 		},
-		"./adapters/zod": {
-			"types": "./build/adapters/zod.d.ts",
-			"default": "./build/adapters/zod.js"
-		},
 		"./adapters/zustand": {
 			"types": "./build/adapters/zustand.d.ts",
 			"default": "./build/adapters/zustand.js"
+		},
+		"./eslint": {
+			"types": "./eslint/index.d.mts",
+			"default": "./eslint/index.mjs"
+		},
+		"./depcruise": {
+			"default": "./depcruise/index.cjs"
 		},
 		"./package.json": "./package.json"
 	},
@@ -115,9 +114,6 @@
 			"optional": true
 		},
 		"zod": {
-			"optional": true
-		},
-		"@janodetzel/feature-kit": {
 			"optional": true
 		}
 	},

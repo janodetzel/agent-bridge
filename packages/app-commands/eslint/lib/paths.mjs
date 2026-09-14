@@ -1,7 +1,6 @@
 import path from "node:path";
 
 export const DEFAULT_FEATURES_DIR = "src/features";
-export const DEFAULT_LOGIC_FILES = ["api", "store", "spec", "index"];
 
 export const toPosix = (filePath) => filePath.split(path.sep).join("/");
 
@@ -31,18 +30,24 @@ export function stem(file) {
 	return dot === -1 ? base : base.slice(0, dot);
 }
 
+/** `todos.test.ts`, `todos.spec.tsx`, or anything under `__tests__/`. */
+export function isTestFile(file) {
+	return /(^|\/)__tests__\//.test(file) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(file);
+}
+
 /**
  * A logic file is one a command has to be able to call from outside React.
  *
- * The check is the file's name, not its contents, because that is the part a
- * reviewer can see at a glance. It matches the four names directly inside a
- * feature folder only, so a `helpers.ts` slips through: put logic a command
- * needs in one of them, or widen `logicFiles`.
+ * Every file in a feature folder is one, at any depth, except tests: screens
+ * live outside `src/features/`, so nothing inside it needs React. A nested
+ * sub-feature (`profile/settings/feature.ts`) is covered the same way.
+ * `logicFiles` narrows the check to those file names, for an app that still
+ * keeps its screens next to the logic.
  */
 export function isLogicFile(filename, options = {}) {
 	const found = featureOf(filename, options.featuresDir ?? DEFAULT_FEATURES_DIR);
-	if (!found || !found.file || found.file.includes("/")) return false;
-	return (options.logicFiles ?? DEFAULT_LOGIC_FILES).includes(stem(found.file));
+	if (!found || !found.file || isTestFile(found.file)) return false;
+	return options.logicFiles ? options.logicFiles.includes(stem(found.file)) : true;
 }
 
 /** Named `store`, wherever it lives. The only place `set` may be called. */

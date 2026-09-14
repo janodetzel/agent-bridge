@@ -12,8 +12,8 @@ export type FeatureKitRuleName =
  * file it is enabled on.
  *
  * - `featuresDir`: where feature folders live, default `src/features`.
- * - `logicFiles`: the file names a command must be able to call from outside
- *   React, default `api`, `store`, `spec`, `index`.
+ * - `logicFiles`: narrows the check to these file names, at any depth. By
+ *   default every file in a feature folder is logic, except tests.
  * - `modules`: `no-ui-in-logic` only - what counts as a UI import. A trailing
  *   `*` matches a prefix.
  */
@@ -24,7 +24,7 @@ export type FeatureKitRuleOptions = {
 };
 
 declare const plugin: ESLint.Plugin & {
-	meta: { name: "feature-kit" };
+	meta: { name: "app-commands" };
 	rules: Record<FeatureKitRuleName, Rule.RuleModule>;
 	configs: { recommended: Linter.Config[] };
 };

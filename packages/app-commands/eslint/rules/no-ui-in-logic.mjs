@@ -24,7 +24,7 @@ export default {
 		},
 		messages: {
 			uiInLogic:
-				'"{{specifier}}" only runs inside React, but {{file}} has to be callable from outside it. Move the UI part into the feature\'s screen.',
+				'"{{specifier}}" only runs inside React, but {{file}} has to be callable from outside it. Move the UI part into a screen, outside the feature.',
 		},
 		schema: [
 			{

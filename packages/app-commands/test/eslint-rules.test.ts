@@ -18,6 +18,7 @@ const tester = new RuleTester({
 
 const APP = "/repo/apps/example-app/src";
 const logic = (feature: string, file: string) => `${APP}/features/${feature}/${file}`;
+const screen = (file: string) => `${APP}/screens/${file}`;
 
 const run = (name: keyof typeof plugin.rules, tests: Parameters<RuleTester["run"]>[2]) =>
 	it(name, () => tester.run(name, plugin.rules[name], tests));
@@ -25,12 +26,18 @@ const run = (name: keyof typeof plugin.rules, tests: Parameters<RuleTester["run"
 describe("no-ui-in-logic", () => {
 	run("no-ui-in-logic", {
 		valid: [
-			{ code: `import { z } from "zod";`, filename: logic("todos", "spec.ts") },
+			{ code: `import { z } from "zod";`, filename: logic("todos", "index.ts") },
 			{ code: `import { gql } from "@apollo/client";`, filename: logic("todos", "api.ts") },
-			// A screen is where React belongs.
-			{ code: `import { View } from "react-native";`, filename: logic("todos", "TodosScreen.tsx") },
-			// Not a logic file name, so the rule stays out of it.
-			{ code: `import { View } from "react-native";`, filename: logic("todos", "helpers.ts") },
+			// A screen is where React belongs, and screens live outside the features.
+			{ code: `import { View } from "react-native";`, filename: screen("todos/TodosScreen.tsx") },
+			// A test may render.
+			{ code: `import { render } from "react";`, filename: logic("todos", "todos.test.ts") },
+			// `logicFiles` narrows the check for an app that keeps screens next to the logic.
+			{
+				code: `import { View } from "react-native";`,
+				filename: logic("todos", "TodosScreen.tsx"),
+				options: [{ logicFiles: ["api", "store", "index"] }],
+			},
 			// Not inside a feature folder at all.
 			{ code: `import { useEffect } from "react";`, filename: `${APP}/app/App.tsx` },
 		],
@@ -38,6 +45,18 @@ describe("no-ui-in-logic", () => {
 			{
 				code: `import { useState } from "react";`,
 				filename: logic("todos", "index.ts"),
+				errors: [{ messageId: "uiInLogic" }],
+			},
+			// Any name counts, not only api, store and index.
+			{
+				code: `import { useStore } from "react";`,
+				filename: logic("todos", "feature.ts"),
+				errors: [{ messageId: "uiInLogic" }],
+			},
+			// And any depth: a nested sub-feature is logic too.
+			{
+				code: `import { View } from "react-native";`,
+				filename: logic("profile", "settings/hooks.ts"),
 				errors: [{ messageId: "uiInLogic" }],
 			},
 			{
@@ -80,14 +99,14 @@ describe("no-cross-feature-import", () => {
 				filename: logic("news", "NewsScreen.tsx"),
 			},
 			{
-				code: `import { defineFeature } from "@janodetzel/feature-kit";`,
+				code: `import { command } from "@janodetzel/app-commands";`,
 				filename: logic("news", "index.ts"),
 			},
-			{ code: `import { todosSpec } from "../todos/spec";`, filename: `${APP}/app/agent.ts` },
+			{ code: `import { todosFeature } from "../todos";`, filename: `${APP}/app/agent.ts` },
 		],
 		invalid: [
 			{
-				code: `import { todosSpec } from "../todos/spec";`,
+				code: `import { todosFeature } from "../todos";`,
 				filename: logic("news", "api.ts"),
 				errors: [{ messageId: "crossFeature" }],
 			},
@@ -133,7 +152,8 @@ describe("no-ambient-io", () => {
 	run("no-ambient-io", {
 		valid: [
 			{ code: `const at = deps.clock();`, filename: logic("todos", "api.ts") },
-			{ code: `const at = Date.now();`, filename: logic("todos", "TodosScreen.tsx") },
+			{ code: `const at = Date.now();`, filename: screen("todos/TodosScreen.tsx") },
+			{ code: `const at = Date.now();`, filename: logic("todos", "todos.test.ts") },
 			{ code: `const at = Date.now();`, filename: `${APP}/app/instances.ts` },
 			{ code: `const d = new Date(iso);`, filename: logic("todos", "api.ts") },
 		],
@@ -146,6 +166,11 @@ describe("no-ambient-io", () => {
 			{
 				code: `const id = String(Math.random());`,
 				filename: logic("todos", "store.ts"),
+				errors: [{ messageId: "ambient" }],
+			},
+			{
+				code: `const at = Date.now();`,
+				filename: logic("profile", "settings/feature.ts"),
 				errors: [{ messageId: "ambient" }],
 			},
 		],

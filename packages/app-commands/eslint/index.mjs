@@ -1,9 +1,10 @@
 /**
  * The principles, as rules.
  *
- * feature-kit ships one function, `defineFeature`. Everything else that makes a
- * feature reachable from outside React is a constraint on how the code is
- * written, and a constraint nobody checks is a comment. These are the checks.
+ * A feature defines its entry points with app-commands' `command()`. Everything
+ * else that makes a feature reachable from outside React is a constraint on how
+ * the code is written, and a constraint nobody checks is a comment. These are
+ * the checks.
  *
  * Each rule decides for itself which files it applies to - by the file's name
  * and its place in the tree - so the recommended config can target every source
@@ -23,14 +24,14 @@ const rules = {
 	"require-rethrow": requireRethrow,
 };
 
-const plugin = { meta: { name: "feature-kit" }, rules };
+const plugin = { meta: { name: "app-commands" }, rules };
 
 /**
  * Flat config. Spread it:
  *
  * ```js
- * import featureKit from "@janodetzel/feature-kit/eslint";
- * export default [...featureKit.configs.recommended];
+ * import appCommands from "@janodetzel/app-commands/eslint";
+ * export default [...appCommands.configs.recommended];
  * ```
  *
  * Pass `featuresDir` or `logicFiles` per rule if the app does not keep its
@@ -39,13 +40,13 @@ const plugin = { meta: { name: "feature-kit" }, rules };
 const recommended = [
 	{
 		files: ["**/*.ts", "**/*.tsx"],
-		plugins: { "feature-kit": plugin },
+		plugins: { "app-commands": plugin },
 		rules: {
-			"feature-kit/no-ambient-io": "error",
-			"feature-kit/no-cross-feature-import": "error",
-			"feature-kit/no-set-outside-store": "error",
-			"feature-kit/no-ui-in-logic": "error",
-			"feature-kit/require-rethrow": "error",
+			"app-commands/no-ambient-io": "error",
+			"app-commands/no-cross-feature-import": "error",
+			"app-commands/no-set-outside-store": "error",
+			"app-commands/no-ui-in-logic": "error",
+			"app-commands/require-rethrow": "error",
 		},
 	},
 ];
