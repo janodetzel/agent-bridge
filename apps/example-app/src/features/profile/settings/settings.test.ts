@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createSettings } from ".";
+import { createSettingsFeature } from ".";
 import { createSettingsStore, type SettingsState } from "./store";
 
 /**
@@ -23,7 +23,7 @@ const memoryStorage = () => {
 describe("the settings feature", () => {
 	it("saves what it sets, and returns state without the actions", async () => {
 		const storage = memoryStorage();
-		const settings = createSettings({ store: createSettingsStore({ storage }) });
+		const settings = createSettingsFeature({ store: createSettingsStore({ storage }) });
 
 		expect(await settings.setUnits({ units: "mi" })).toBe("mi");
 		expect(storage.read()).toEqual({ units: "mi", notifications: true });
@@ -33,7 +33,7 @@ describe("the settings feature", () => {
 	it("saves a notification toggle through the store the screen reads", async () => {
 		const storage = memoryStorage();
 		const store = createSettingsStore({ storage });
-		const settings = createSettings({ store });
+		const settings = createSettingsFeature({ store });
 
 		await settings.setNotifications({ notifications: false });
 
@@ -50,7 +50,7 @@ describe("the settings feature", () => {
 				},
 			},
 		});
-		const settings = createSettings({ store });
+		const settings = createSettingsFeature({ store });
 
 		await expect(settings.setUnits({ units: "mi" })).rejects.toThrow("disk full");
 		// The rethrow is what makes the command fail, and the rollback is what keeps

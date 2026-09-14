@@ -1,8 +1,8 @@
 import { ApolloClient, InMemoryCache } from "@apollo/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { apiLink } from "../../app/api";
-import { createTodos } from ".";
+import { apiLink } from "../../server/server";
+import { createTodosFeature } from ".";
 
 /**
  * The feature is tested through its own methods, which is the call the screens
@@ -17,16 +17,16 @@ import { createTodos } from ".";
  */
 
 describe("the todos feature", () => {
-	let todos: ReturnType<typeof createTodos>;
+	let todos: ReturnType<typeof createTodosFeature>;
 
 	beforeEach(() => {
 		// A fresh client, so each test starts with an empty cache.
-		todos = createTodos({
+		todos = createTodosFeature({
 			apollo: new ApolloClient({ link: apiLink, cache: new InMemoryCache() }),
 		});
 	});
 
-	it("implements every entry point its spec declares", () => {
+	it("exposes its entry points and nothing else", () => {
 		expect(Object.keys(todos).sort()).toEqual([
 			"add",
 			"addMany",

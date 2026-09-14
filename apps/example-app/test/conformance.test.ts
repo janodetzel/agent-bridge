@@ -1,18 +1,14 @@
 import { ApolloClient, InMemoryCache } from "@apollo/client";
 import { apolloCommands } from "@janodetzel/app-commands/adapters/apollo";
-import { buildRegistry } from "@janodetzel/app-commands";
+import { buildRegistry, command, featureCommands } from "@janodetzel/app-commands";
 import { checkRegistry } from "@janodetzel/app-commands/conformance";
-import { featureCommands } from "@janodetzel/app-commands/adapters/feature-kit";
-import { zodCommands } from "@janodetzel/app-commands/adapters/zod";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { apiLink } from "../src/app/api";
-import { createNews } from "../src/features/news";
-import { createDismissedNewsStore } from "../src/features/news/store";
-import { createSettings } from "../src/features/settings";
-import { createSettingsStore } from "../src/features/settings/store";
-import { createTodos } from "../src/features/todos";
+import { apiLink } from "../src/server/server";
+import { createDismissedNewsStore, createNewsFeature } from "../src/features/news";
+import { createSettingsFeature, createSettingsStore } from "../src/features/profile/settings";
+import { createTodosFeature } from "../src/features/todos";
 
 /**
  * The conformance suite the package ships, run against this app's own registry.
@@ -33,19 +29,18 @@ const nullStorage = <T>() => ({ get: async () => null as T | null, set: async ()
 function buildAppRegistry() {
 	const client = new ApolloClient({ link: apiLink, cache: new InMemoryCache() });
 	return buildRegistry(
-		featureCommands(
-			createTodos({ apollo: client }),
-			createNews({
+		featureCommands({
+			todos: createTodosFeature({ apollo: client }),
+			news: createNewsFeature({
 				apollo: client,
 				store: createDismissedNewsStore({ storage: nullStorage<string[]>() }),
 			}),
-			createSettings({ store: createSettingsStore({ storage: nullStorage() }) }),
-		),
-		zodCommands("exampleCommand", {
-			inout: {
-				args: z.object({ arg: z.string() }),
-				description: "A command that forwards its input",
-				run: async ({ arg }) => ({ arg }),
+			settings: createSettingsFeature({ store: createSettingsStore({ storage: nullStorage() }) }),
+			exampleCommand: {
+				inout: command()
+					.input(z.object({ arg: z.string() }))
+					.description("A command that forwards its input")
+					.run(async ({ arg }) => ({ arg })),
 			},
 		}),
 		apolloCommands(client),
